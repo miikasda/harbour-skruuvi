@@ -2,7 +2,7 @@
 
 # Skruuvi
 
-Skruuvi is a powerful application designed for Sailfish OS that allows you to effortlessly read and plot history data from RuuviTags. With Skruuvi, you can easily access and analyze sensor information from your RuuviTag devices right from your Sailfish OS smartphone.
+Skruuvi is a powerful application designed for Sailfish OS that allows you to effortlessly read and plot history data from [RuuviTags](https://ruuvi.com/). With Skruuvi, you can easily access and analyze sensor information from your RuuviTag devices right from your Sailfish OS smartphone.
 
 <p align="center">
     <img alt="Select device" src="./screenshots/select_device.png?" width="30%"> &nbsp; &nbsp; &nbsp; &nbsp;
@@ -24,4 +24,18 @@ Skruuvi uses internally [bleak](https://github.com/hbldh/bleak), [async-timeout]
 
 ## License
 
-Skruuvi is licensed under GPL-3.0
+Skruuvi is licensed under GPL-3.0. License is provided [here](LICENSE).
+
+## To do list
+
+To do list for Skruuvi is in the [wiki](https://github.com/miikasda/harbour-skruuvi/wiki/To-do-list). If you have a feature in mind which is not in the to do list, please open a [issue](https://github.com/miikasda/harbour-skruuvi/issues) with enhancement label.
+
+## Local database location
+
+The sensor readings are stored in local SQLite database. The database is located at `~/.local/share/org.malmi/harbour-skruuvi/ruuviData.sqlite`
+
+For example if your username is defaultuser, the database can be pulled with rsync:
+
+```
+rsync defaultuser@192.168.1.98:/home/defaultuser/.local/share/org.malmi/harbour-skruuvi/ruuviData.sqlite ./
+```
