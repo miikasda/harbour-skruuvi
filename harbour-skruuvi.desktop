@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=harbour-skruuvi
+Exec=harbour-skruuvi
+Name=Skruuvi
+# translation example:
+# your app name in German locale (de)
+#
+# Remember to comment out the following line, if you do not want to use
+# a different app name in German locale (de).
+#Name[de]=harbour-skruuvi
+
+[X-Sailjail]
+# Replace with your organization as a reverse domain name
+OrganizationName=org.malmi
+# ApplicationName does not have to be identical to Name
+ApplicationName=harbour-skruuvi
+# Add the required permissions here
+Permissions=Bluetooth

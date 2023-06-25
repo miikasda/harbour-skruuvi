@@ -1,0 +1,9 @@
+[submodule "python_packages/bleak"]
+	path = python_packages/bleak
+	url = https://github.com/hbldh/bleak
+[submodule "python_packages/async_timeout"]
+	path = python_packages/async_timeout
+	url = https://github.com/aio-libs/async-timeout
+[submodule "python_packages/dbus_fast"]
+	path = python_packages/dbus_fast
+	url = https://github.com/Bluetooth-Devices/dbus-fast
