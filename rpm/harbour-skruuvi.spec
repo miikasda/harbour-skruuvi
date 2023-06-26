@@ -47,6 +47,7 @@ Screenshots:
 Links:
   Homepage: https://github.com/miikasda/harbour-skruuvi
   Bugtracker: https://github.com/miikasda/harbour-skruuvi/issues
+  Donation: https://github.com/sponsors/miikasda
 %endif
 
 
