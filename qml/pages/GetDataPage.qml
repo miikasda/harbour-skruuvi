@@ -21,11 +21,6 @@ import io.thp.pyotherside 1.4
 
 Page {
 
-    // TODO; put all items inside a column as in plotdatapage
-    // this way we support devices with not so long screen.
-    // Test with landscapemode
-    allowedOrientations: Orientation.All // Remove after debugging
-
     property int leftMargin: Theme.horizontalPageMargin
     property int rightMargin: Theme.horizontalPageMargin
 
