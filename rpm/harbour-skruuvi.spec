@@ -3,8 +3,8 @@ Name:       harbour-skruuvi
 Summary:    Reader for Ruuvi sensors
 Version:    1.0
 Release:    1
-License:    LICENSE
-URL:        http://example.org/
+License:    GPLv3
+URL:        https://github.com/miikasda/harbour-skruuvi
 Source0:    %{name}-%{version}.tar.bz2
 Requires:   sailfishsilica-qt5 >= 0.10.9
 BuildRequires:  pkgconfig(sailfishapp) >= 1.0.2
