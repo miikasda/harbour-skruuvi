@@ -19,7 +19,7 @@ For any official RuuviTag support, firmware updates, or inquiries, please refer 
 
 ## Supported architectures and SFOS versions
 
-Skruuvi supports the aarch64 architecture and OS versions starting from 4.5. To add support for other architectures, I require physical devices to ensure that all Bluetooth connections work properly.
+Skruuvi supports the aarch64 and armv7hl architectures. OS versions are supported starting from 4.5. To add support for other architectures, I require physical devices to ensure that all Bluetooth connections work properly.
 
 If you are aware that Skruuvi works on other architectures or older SFOS versions, please let me know.
 
