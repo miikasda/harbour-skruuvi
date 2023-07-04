@@ -17,12 +17,13 @@ Skruuvi is an unofficial application and is not developed or maintained by Ruuvi
 
 For any official RuuviTag support, firmware updates, or inquiries, please refer to the official Ruuvi website or consult the Ruuvi community forums.
 
-## Supported architectures and SFOS versions
+## Supported architectures, SFOS versions and RuuviTags
 
-Skruuvi supports the aarch64 architecture and OS versions starting from 4.5. To add support for other architectures, I require physical devices to ensure that all Bluetooth connections work properly.
+Skruuvi supports the aarch64 and armv7hl architectures. OS versions are supported starting from 4.5. To add support for other architectures, I require physical devices to ensure that all Bluetooth connections work properly.
 
 If you are aware that Skruuvi works on other architectures or older SFOS versions, please let me know.
 
+Skruuvi supports all RuuviTag sensors with firmware starting from 3.30.x. If you cant see your Ruuvi in the device list, try [updating](https://ruuvi.com/software-update/) the firmware.
 
 ## Distribution
 
@@ -34,7 +35,6 @@ The Chum community repository provides builds for unsupported architectures and 
 ## Dependencies
 
 Skruuvi uses internally [bleak](https://github.com/hbldh/bleak), [async-timeout](https://github.com/aio-libs/async-timeout) and [dbus-fast](https://github.com/Bluetooth-Devices/dbus-fast) to get history data from RuuviTags with Bluetooth. Data graph plots (GraphData.qml and Axis.qml) are slightly modified versions from [systemmonitor](https://github.com/custodian/harbour-systemmonitor).
-
 
 ## License
 

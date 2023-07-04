@@ -155,34 +155,27 @@ Page {
                 enabled: !fetchAllSwitch.checked
             }
 
-            Item {
-                // Dirty hack to get leftMargin padding for the button
-                id: buttonContainer
-                anchors.top: dateChosen.bottom
-                anchors.left: parent.left
-                width: leftMargin
+            Button {
+                id: timeButton
+                text: "Choose a time"
+                enabled: !fetchAllSwitch.checked
+                anchors.horizontalCenter: parent.horizontalCenter
                 visible: !loadingScreen.running
-
-                Button {
-                    id: timeButton
-                    text: "Choose a time"
-                    anchors.left: buttonContainer.right
-                    enabled: !fetchAllSwitch.checked
-                    onClicked: {
-                        var timeChosen = pageStack.push("Sailfish.Silica.TimePickerDialog", {
-                            hourMode: DateTime.TwentyFourHours,
-                            hour: 12,
-                            minute: 00
-                        })
-                        timeChosen.accepted.connect(function() {
-                            timeButton.text = "Time chosen: " + timeChosen.timeText
-                            pickedHour = timeChosen.hour
-                            pickedMinute = timeChosen.minute
-                        })
-                    }
+                onClicked: {
+                    var timeChosen = pageStack.push("Sailfish.Silica.TimePickerDialog", {
+                        hourMode: DateTime.TwentyFourHours,
+                        hour: 12,
+                        minute: 00
+                    })
+                    timeChosen.accepted.connect(function() {
+                        timeButton.text = "Time chosen: " + timeChosen.timeText
+                        pickedHour = timeChosen.hour
+                        pickedMinute = timeChosen.minute
+                    })
                 }
             }
         }
+
         // Loading screen on data fetch
         BusyLabel {
             id: loadingScreen
