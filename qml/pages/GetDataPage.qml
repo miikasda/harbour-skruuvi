@@ -45,7 +45,7 @@ Page {
 
             // Change to the page displaying the data
             var currentTime = Math.floor(Date.now() / 1000);
-            pageStack.push(Qt.resolvedUrl("plotDataPage.qml"), {
+            pageStack.push(Qt.resolvedUrl("PlotDataPage.qml"), {
                 startTime: logStart,
                 endTime: currentTime,
                 selectedDevice: selectedDevice

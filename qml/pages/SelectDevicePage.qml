@@ -194,7 +194,7 @@ Page {
                             }
                             // On default show last 24h data
                             var currentTime = Math.floor(Date.now() / 1000);
-                            pageStack.push(Qt.resolvedUrl("plotDataPage.qml"),
+                            pageStack.push(Qt.resolvedUrl("PlotDataPage.qml"),
                                            {
                                                startTime: currentTime - 86400,
                                                endTime: currentTime,
