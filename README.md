@@ -34,7 +34,7 @@ The Chum community repository provides builds for unsupported architectures and 
 
 ## Dependencies
 
-Skruuvi uses internally [bleak](https://github.com/hbldh/bleak), [async-timeout](https://github.com/aio-libs/async-timeout) and [dbus-fast](https://github.com/Bluetooth-Devices/dbus-fast) to get history data from RuuviTags with Bluetooth. Data graph plots (GraphData.qml and Axis.qml) are slightly modified versions from [systemmonitor](https://github.com/custodian/harbour-systemmonitor).
+Skruuvi uses internally [bleak](https://github.com/hbldh/bleak), [async-timeout](https://github.com/aio-libs/async-timeout) and [dbus-fast](https://github.com/Bluetooth-Devices/dbus-fast) to get history data from RuuviTags with Bluetooth. Data graph plots (GraphData.qml and Axis.qml) are slightly modified versions from [systemmonitor](https://github.com/custodian/harbour-systemmonitor), and about page has been done by using [Opal](https://github.com/Pretty-SFOS/opal-about).
 
 ## License
 

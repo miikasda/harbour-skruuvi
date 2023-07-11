@@ -28,6 +28,7 @@ SOURCES += src/harbour-skruuvi.cpp \
 
 DISTFILES += qml/harbour-skruuvi.qml \
     qml/cover/CoverPage.qml \
+    qml/pages/AboutPage.qml \
     qml/pages/GetDataPage.qml \
     qml/pages/SelectDevicePage.qml \
     qml/pages/plotDataPage.qml \

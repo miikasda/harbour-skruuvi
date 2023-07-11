@@ -58,6 +58,12 @@ Page {
             //height: 0.2667 * skruuviLogo.width
             anchors.top: pHeader.bottom
             anchors.horizontalCenter: parent.horizontalCenter
+            MouseArea{
+                anchors.fill: parent
+                onClicked: {
+                    pageStack.push(Qt.resolvedUrl("AboutPage.qml"))
+                }
+           }
         }
 
         BusyIndicator {

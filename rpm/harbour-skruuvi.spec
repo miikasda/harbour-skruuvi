@@ -74,3 +74,8 @@ desktop-file-install --delete-original         --dir %{buildroot}%{_datadir}/app
 %{_datadir}/%{name}
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
+
+# This block is needed for Opal not to provide anything which is not allowed in harbour
+# >> macros
+%define __provides_exclude_from ^%{_datadir}/.*$
+# << macros
