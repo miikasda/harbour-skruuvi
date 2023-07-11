@@ -174,7 +174,7 @@ Item {
                             top: parent.bottom
                             horizontalCenter: parent.horizontalCenter
                         }
-                        text: Qt.formatDate(new Date( ((maxX-minX)/axisX.grid * index + minX) * 1000), "ddd");
+                        text: Qt.formatDate(new Date( ((maxX-minX)/axisX.grid * index + minX) * 1000), "ddd dd.MM");
                         visible: doubleAxisXLables
                     }
                 }
