@@ -32,8 +32,8 @@ DISTFILES += qml/harbour-skruuvi.qml \
     qml/pages/GetDataPage.qml \
     qml/pages/SelectDevicePage.qml \
     qml/pages/plotDataPage.qml \
-    qml/pages/GraphData.qml \
-    qml/pages/Axis.qml \
+    qml/modules/GraphData/GraphData.qml \
+    qml/modules/GraphData/Axis.qml \
     rpm/harbour-skruuvi.changes.in \
     rpm/harbour-skruuvi.changes.run.in \
     rpm/harbour-skruuvi.spec \
