@@ -125,6 +125,16 @@ Page {
                 width: parent.width
                 scale: true
                 axisY.units: "°C"
+                onClicked: {
+                                pageStack.push(
+                                    Qt.resolvedUrl("GraphPage.qml"),
+                                    {
+                                       par_data: tempData,
+                                       par_title: graphTitle,
+                                       par_units: axisY.units
+                                    }
+                                );
+                }
             }
 
             GraphData {
@@ -133,6 +143,16 @@ Page {
                 width: parent.width
                 scale: true
                 axisY.units: "%rH"
+                onClicked: {
+                                pageStack.push(
+                                    Qt.resolvedUrl("GraphPage.qml"),
+                                    {
+                                       par_data: humidityData,
+                                       par_title: graphTitle,
+                                       par_units: axisY.units
+                                    }
+                                );
+                }
             }
 
             GraphData {
@@ -141,6 +161,16 @@ Page {
                 width: parent.width
                 scale: true
                 axisY.units: "mBar"
+                onClicked: {
+                                pageStack.push(
+                                    Qt.resolvedUrl("GraphPage.qml"),
+                                    {
+                                       par_data: pressureData,
+                                       par_title: graphTitle,
+                                       par_units: axisY.units
+                                    }
+                                );
+                }
             }
 
             Component.onCompleted: {

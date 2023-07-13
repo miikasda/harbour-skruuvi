@@ -30,6 +30,7 @@ DISTFILES += qml/harbour-skruuvi.qml \
     qml/cover/CoverPage.qml \
     qml/pages/AboutPage.qml \
     qml/pages/GetDataPage.qml \
+    qml/pages/GraphPage.qml \
     qml/pages/SelectDevicePage.qml \
     qml/pages/PlotDataPage.qml \
     qml/modules/GraphData/GraphData.qml \
