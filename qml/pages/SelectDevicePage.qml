@@ -142,9 +142,9 @@ Page {
 
                     Image {
                         id: icon
-                        source: "images/ruuvitag-enclosure-bottom-768x768.jpg"
+                        source: "images/ruuvi-tag-menu-v2.png"
                         width: Theme.iconSizeLarge
-                        height: Theme.iconSizeLarge
+                        height: Theme.iconSizeLarge * 0.8
 
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
