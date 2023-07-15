@@ -39,6 +39,7 @@ Page {
                     clearBluetoothIcons();
                     busyIndicator.visible = true;
                     busyIndicator.running = true;
+                    btOffLabel.visible = false;
                     ld.startDiscovery();
                 }
             }
@@ -66,6 +67,17 @@ Page {
            }
         }
 
+        Label {
+            id: btOffLabel
+            text: "Bluetooth is off, please turn it on"
+            height: visible ? contentHeight : 0
+            font.pixelSize: Theme.fontSizeLarge
+            color: Theme.highlightColor
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: skruuviLogo.bottom
+            visible: false
+        }
+
         BusyIndicator {
              id: busyIndicator
              size: BusyIndicatorSize.Medium
@@ -77,7 +89,7 @@ Page {
             id: deviceList
             width: parent.width - (leftMargin + rightMargin)
             height: parent.height - skruuviLogo.height - pHeader.height
-            anchors.top: skruuviLogo.bottom
+            anchors.top: btOffLabel.bottom
             anchors.bottom: parent.bottom
             clip: true
             header: PageHeader {
@@ -314,6 +326,9 @@ Page {
         }
         onDiscoveryStopped: {
             busyIndicator.visible = false;
+        }
+        onBluetoothOff: {
+            btOffLabel.visible = true;
         }
     }
 }

@@ -32,6 +32,7 @@ public:
 signals:
     void deviceFound(const QString deviceName, const QString deviceAddress);
     void discoveryStopped();
+    void bluetoothOff();
 
 private slots:
     void onInterfacesAdded(const QDBusObjectPath &objectPath, const QVariantMap &interfaces);

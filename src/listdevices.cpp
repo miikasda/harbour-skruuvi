@@ -36,9 +36,14 @@ void listdevices::startDiscovery()
     // Create the adapter interface
     QDBusInterface adapterInterface("org.bluez", "/org/bluez/hci0", "org.bluez.Adapter1", bus, this);
 
+    // Start the discovery
     QDBusMessage startDiscovery = adapterInterface.call("StartDiscovery");
     if (startDiscovery.type() == QDBusMessage::ErrorMessage) {
         qDebug() << "Failed to start device discovery:" << startDiscovery.errorMessage();
+        if (startDiscovery.errorMessage().toStdString() == "Resource Not Ready") {
+            emit bluetoothOff();
+        }
+        emit discoveryStopped();
         return;
     }
 
