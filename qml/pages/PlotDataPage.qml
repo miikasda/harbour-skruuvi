@@ -17,6 +17,7 @@
 */
 import QtQuick 2.0
 import Sailfish.Silica 1.0
+import Sailfish.Share 1.0
 
 import "../modules/GraphData"
 
@@ -27,8 +28,6 @@ Page {
     property var selectedDevice: pageStack.pop().selectedDevice
     property int leftMargin: Theme.horizontalPageMargin
     property int rightMargin: Theme.horizontalPageMargin
-    property int startTimestamp: -1
-    property int endTimestamp: -1
 
     // Use global data so we can redraw it
     property var tempData: []
@@ -54,6 +53,12 @@ Page {
             flickable: flickable
     }
 
+    ShareAction {
+        id: shareaction
+        title: "CSV has been saved to Documents. Share it?"
+        mimeType: "text/csv"
+    }
+
     SilicaFlickable {
         id: flickable
         anchors.fill: parent
@@ -61,23 +66,35 @@ Page {
 
         PullDownMenu {
             MenuItem {
+                text: "Export as CSV"
+                onClicked: {
+                    // Save the CSV
+                    var csv_path = db.exportCSV(selectedDevice.deviceAddress, selectedDevice.deviceName, startTime, endTime);
+                    // Launch the share action
+                    if (csv_path.length > 0) {
+                        shareaction.resources = [csv_path];
+                        shareaction.trigger();
+                    }
+                }
+            }
+            MenuItem {
                 text: "Plot data"
                 onClicked: {
                     // Check if custom plot time is defined
                     if (!startDateButton.clicked) {
                         // No start time; fetch all from the start
-                        startTimestamp = 1;
+                        startTime = 1;
                     }
                     if (!endDateButton.clicked) {
                         // No end time; fetch up to current time
-                        endTimestamp = Math.floor(Date.now() / 1000);
+                        endTime = Math.floor(Date.now() / 1000);
                     }
                     // Fetch and plot the data
-                    tempData = db.getSensorData(selectedDevice.deviceAddress, "temperature", startTimestamp, endTimestamp);
+                    tempData = db.getSensorData(selectedDevice.deviceAddress, "temperature", startTime, endTime);
                     tempGraph.setPoints(tempData);
-                    humidityData = db.getSensorData(selectedDevice.deviceAddress, "humidity", startTimestamp, endTimestamp);
+                    humidityData = db.getSensorData(selectedDevice.deviceAddress, "humidity", startTime, endTime);
                     humidityGraph.setPoints(humidityData);
-                    pressureData = db.getSensorData(selectedDevice.deviceAddress, "air_pressure", startTimestamp, endTimestamp);
+                    pressureData = db.getSensorData(selectedDevice.deviceAddress, "air_pressure", startTime, endTime);
                     pressureGraph.setPoints(pressureData);
                 }
             }
@@ -203,7 +220,7 @@ Page {
                         var dialog = pageStack.push(startPicker, {})
                         dialog.accepted.connect(function() {
                             startDateButton.text = "Start date: " + dialog.dateText
-                            startTimestamp = calculateUnixTimestamp(dialog.day, dialog.month, dialog.year, true)
+                            startTime = calculateUnixTimestamp(dialog.day, dialog.month, dialog.year, true)
                             startDateButton.clicked = true
                         })
                     }
@@ -234,7 +251,7 @@ Page {
                         var dialog = pageStack.push(endPicker, {})
                         dialog.accepted.connect(function() {
                             endDateButton.text = "End date: " + dialog.dateText
-                            endTimestamp = calculateUnixTimestamp(dialog.day, dialog.month, dialog.year, false)
+                            endTime = calculateUnixTimestamp(dialog.day, dialog.month, dialog.year, false)
                             endDateButton.clicked = true
                         })
                     }
