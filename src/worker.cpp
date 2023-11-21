@@ -48,7 +48,7 @@ void worker::inputRawData() {
         QVariantList itemList = item.toList();
         int sensor = itemList[1].toInt();
         int timestamp = itemList[3].toInt();
-        double value = itemList[4].toDouble() / 100.0;
+        double value = static_cast<double>(itemList[4].toInt()) / 100.0;
 
         // Collect the data to sensor lists
         switch (sensor) {
