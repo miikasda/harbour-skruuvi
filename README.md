@@ -34,7 +34,7 @@ The Chum community repository provides builds for unsupported architectures and 
 
 ## Dependencies
 
-Skruuvi uses internally [bleak](https://github.com/hbldh/bleak), [async-timeout](https://github.com/aio-libs/async-timeout) and [dbus-fast](https://github.com/Bluetooth-Devices/dbus-fast) to get history data from RuuviTags with Bluetooth. Data graph plots (GraphData.qml and Axis.qml) are slightly modified versions from [systemmonitor](https://github.com/custodian/harbour-systemmonitor).
+Skruuvi uses internally [bleak](https://github.com/hbldh/bleak), [async-timeout](https://github.com/aio-libs/async-timeout) and [dbus-fast](https://github.com/Bluetooth-Devices/dbus-fast) to get history data from RuuviTags with Bluetooth. Data graph plots (GraphData.qml and Axis.qml) are slightly modified versions from [systemmonitor](https://github.com/custodian/harbour-systemmonitor), and about page has been done by using [Opal](https://github.com/Pretty-SFOS/opal-about).
 
 ## License
 
@@ -44,12 +44,12 @@ Skruuvi is licensed under GPL-3.0. License is provided [here](LICENSE).
 
 To do list for Skruuvi is in the [wiki](https://github.com/miikasda/harbour-skruuvi/wiki/To-do-list). If you have a feature in mind which is not in the to do list, please open a [issue](https://github.com/miikasda/harbour-skruuvi/issues) with enhancement label.
 
-## Local database location
+## Local data location
 
-The sensor readings are stored in local SQLite database. The database is located at `~/.local/share/org.malmi/harbour-skruuvi/ruuviData.sqlite`
-
-For example if your username is defaultuser, the database can be pulled with rsync:
+The sensor readings are stored in local SQLite database. The database is located at `~/.local/share/org.malmi/harbour-skruuvi/ruuviData.sqlite` . For example if your username is defaultuser, the database can be pulled with rsync:
 
 ```
 rsync defaultuser@192.168.1.98:/home/defaultuser/.local/share/org.malmi/harbour-skruuvi/ruuviData.sqlite ./
 ```
+
+The sensor readings can be exported as CSV from the data plot page. The resulting CSV is stored in `~/Documents/skruuvi-exports` folder.

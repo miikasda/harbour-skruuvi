@@ -20,6 +20,8 @@
 #include <QDebug>
 #include <ctime>
 #include <QThread>
+#include <QFile>
+#include <QTextStream>
 
 
 database::database(QObject* parent) : QObject(parent) {
@@ -222,4 +224,68 @@ void database::removeDevice(const QString deviceAddress) {
     // Remove device from devices table
     QString deleteDeviceQuery = "DELETE FROM devices WHERE mac = '" + deviceAddress + "'";
     executeQuery(deleteDeviceQuery);
+}
+
+QString database::exportCSV(const QString deviceAddress, const QString deviceName, int startTime, int endTime) {
+    // Create the path for csv file
+    std::time_t currentTimestamp = std::time(nullptr);
+    std::tm* currentTime = std::localtime(&currentTimestamp);
+    char timeStr[18];
+    std::strftime(timeStr, sizeof(timeStr), "%d-%m-%y-%H-%M-%S", currentTime);
+    QString modifiedDeviceAddress = deviceAddress;
+    modifiedDeviceAddress.replace(":", "-");
+    QString csvFolder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    csvFolder = csvFolder + "/" + "skruuvi-exports";
+    // Check that skruuviExports dir exists in Documents. If not, create it
+    if (!QDir(csvFolder).exists()) {
+        qDebug() << "skruuvi-exports folder did not exist; creating it";
+        QDir().mkpath(csvFolder);
+    }
+    QString csvPath = csvFolder + "/" + modifiedDeviceAddress + "_" + deviceName + "_" + timeStr + ".csv";
+    qDebug() << "Exporting data to" << csvPath;
+
+    // Open the file for writing the csv
+    QFile file(csvPath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qDebug() << "Error opening file:" << file.errorString();
+        return "";
+    }
+    QTextStream stream(&file);
+
+    // Get all measurements from db
+    QString selectQuery = "SELECT t.timestamp, temperature.value AS temperature, humidity.value AS humidity, air_pressure.value AS air_pressure"
+                          " FROM ("
+                          "     SELECT DISTINCT timestamp FROM temperature WHERE device = '" + deviceAddress + "' AND timestamp >= " + QString::number(startTime) +
+                          "     AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM humidity WHERE device = '" + deviceAddress + "' AND timestamp >= " + QString::number(startTime) +
+                          "     AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM air_pressure WHERE device = '" + deviceAddress + "' AND timestamp >= " + QString::number(startTime) +
+                          "     AND timestamp <= " + QString::number(endTime) +
+                          " ) t"
+                          " LEFT JOIN temperature ON t.timestamp = temperature.timestamp AND temperature.device = '" + deviceAddress + "'"
+                          " LEFT JOIN humidity ON t.timestamp = humidity.timestamp AND humidity.device = '" + deviceAddress + "'"
+                          " LEFT JOIN air_pressure ON t.timestamp = air_pressure.timestamp AND air_pressure.device = '" + deviceAddress + "'"
+                          " ORDER BY t.timestamp ASC";
+    QSqlQuery query(db);
+
+    // Write header to the CSV file
+    stream << "mac,name,timestamp,temperature,humidity,air_pressure\n";
+    // Loop through the query results
+    if (query.exec(selectQuery)) {
+        while (query.next()) {
+            int timestamp = query.value(0).toInt();
+            QString temperature = query.value(1).isNull() ? "-" : QString::number(query.value(1).toDouble());
+            QString humidity = query.value(2).isNull() ? "-" : QString::number(query.value(2).toDouble());
+            QString air_pressure = query.value(3).isNull() ? "-" : QString::number(query.value(3).toDouble());
+            // Write the data to the CSV file
+            stream << deviceAddress << "," << deviceName << "," << timestamp << "," << temperature << "," << humidity << "," << air_pressure << "\n";
+        }
+    } else {
+        qDebug() << "Error executing sensor data query:" << query.lastError().text();
+    }
+
+    file.close();
+    return csvPath;
 }

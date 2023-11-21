@@ -36,6 +36,7 @@ public:
     Q_INVOKABLE int getLastMeasurement(const QString deviceAddress, const QString sensor);
     Q_INVOKABLE void renameDevice(const QString deviceAddress, const QString newDeviceName);
     Q_INVOKABLE void removeDevice(const QString deviceAddress);
+    Q_INVOKABLE QString exportCSV(const QString deviceAddress, const QString deviceName, int startTime, int endTime);
 
 private:
     QSqlDatabase db;

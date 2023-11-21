@@ -1,0 +1,100 @@
+# This workflow is triggered when PR is merged to main branch
+name: Build RPMs and create release if version has changed
+
+env:
+  # Check latest version from https://github.com/CODeRUS/docker-sailfishos-platform-sdk
+  sfos_version: 4.5.0.16
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [closed]
+
+jobs:
+  version:
+      if: github.event.pull_request.merged == true
+      name: Check version
+      runs-on: ubuntu-22.04
+      outputs:
+        current_version: ${{ steps.current_version.outputs.current_version }}
+        latest_release: ${{ steps.latest_release.outputs.tag }}
+      steps:
+        - name: Checkout repo
+          id: checkout
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0 # Required to get the latest tag
+        - name: Check current version
+          id: current_version
+          run: |
+            current_version=$(grep -E '^\s*Version\s*:' rpm/harbour-skruuvi.spec | awk '{print "v" $2}')
+            echo "current_version=$current_version" >> $GITHUB_OUTPUT
+            echo "Current version is $current_version"
+        - name: Check latest release version
+          id: latest_release
+          uses: "WyriHaximus/github-action-get-previous-tag@v1"
+          with:
+            fallback: ${{ steps.version.outputs.current_version }} # Use current version as fallback so no release is triggered
+
+  build:
+    if: github.event.pull_request.merged == true
+    name: Build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+      - name: Initialize RPM building
+        id: init
+        run: docker pull coderus/sailfishos-platform-sdk:$sfos_version && mkdir RPMS
+      - name: Build aarch64
+        id: build_aarch64
+        uses: coderus/github-sfos-build@master
+        with:
+          release: ${{ env.sfos_version }}
+          arch: aarch64
+      - name: Build armv7hl
+        id: build_armv7hl
+        uses: coderus/github-sfos-build@master
+        with:
+          release: ${{ env.sfos_version }}
+          arch: armv7hl
+      - name: Build i486
+        uses: coderus/github-sfos-build@master
+        with:
+          release: ${{ env.sfos_version }}
+          arch: i486
+      - name: Upload build result
+        id: upload
+        uses: actions/upload-artifact@v3
+        with:
+          name: rpm-build-result
+          path: RPMS
+
+  release:
+    # Only create the release if the version in .spec is different than current tag
+    if: ${{ github.event.pull_request.merged == true && needs.version.outputs.current_version != needs.version.outputs.latest_release }}
+    needs: [version, build]
+    name: Release
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download RPMs
+        uses: actions/download-artifact@v3
+        with:
+          name: rpm-build-result
+      - name: Create a release
+        id: release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: '*.rpm'
+          draft: false
+          prerelease: false
+          name: ${{needs.version.outputs.current_version}}
+          tag_name: ${{needs.version.outputs.current_version}}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"

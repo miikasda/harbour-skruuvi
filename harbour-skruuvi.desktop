@@ -17,4 +17,4 @@ OrganizationName=org.malmi
 # ApplicationName does not have to be identical to Name
 ApplicationName=harbour-skruuvi
 # Add the required permissions here
-Permissions=Bluetooth
+Permissions=Bluetooth;Documents

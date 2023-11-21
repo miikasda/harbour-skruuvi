@@ -39,6 +39,7 @@ Page {
                     clearBluetoothIcons();
                     busyIndicator.visible = true;
                     busyIndicator.running = true;
+                    btOffLabel.visible = false;
                     ld.startDiscovery();
                 }
             }
@@ -58,6 +59,23 @@ Page {
             //height: 0.2667 * skruuviLogo.width
             anchors.top: pHeader.bottom
             anchors.horizontalCenter: parent.horizontalCenter
+            MouseArea{
+                anchors.fill: parent
+                onClicked: {
+                    pageStack.push(Qt.resolvedUrl("AboutPage.qml"))
+                }
+           }
+        }
+
+        Label {
+            id: btOffLabel
+            text: "Bluetooth is off, please turn it on"
+            height: visible ? contentHeight : 0
+            font.pixelSize: Theme.fontSizeLarge
+            color: Theme.highlightColor
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: skruuviLogo.bottom
+            visible: false
         }
 
         BusyIndicator {
@@ -71,7 +89,7 @@ Page {
             id: deviceList
             width: parent.width - (leftMargin + rightMargin)
             height: parent.height - skruuviLogo.height - pHeader.height
-            anchors.top: skruuviLogo.bottom
+            anchors.top: btOffLabel.bottom
             anchors.bottom: parent.bottom
             clip: true
             header: PageHeader {
@@ -136,9 +154,9 @@ Page {
 
                     Image {
                         id: icon
-                        source: "images/ruuvitag-enclosure-bottom-768x768.jpg"
+                        source: "images/ruuvi-tag-menu-v2.png"
                         width: Theme.iconSizeLarge
-                        height: Theme.iconSizeLarge
+                        height: Theme.iconSizeLarge * 0.8
 
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
@@ -188,7 +206,7 @@ Page {
                             }
                             // On default show last 24h data
                             var currentTime = Math.floor(Date.now() / 1000);
-                            pageStack.push(Qt.resolvedUrl("plotDataPage.qml"),
+                            pageStack.push(Qt.resolvedUrl("PlotDataPage.qml"),
                                            {
                                                startTime: currentTime - 86400,
                                                endTime: currentTime,
@@ -308,6 +326,9 @@ Page {
         }
         onDiscoveryStopped: {
             busyIndicator.visible = false;
+        }
+        onBluetoothOff: {
+            btOffLabel.visible = true;
         }
     }
 }

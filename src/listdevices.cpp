@@ -36,9 +36,23 @@ void listdevices::startDiscovery()
     // Create the adapter interface
     QDBusInterface adapterInterface("org.bluez", "/org/bluez/hci0", "org.bluez.Adapter1", bus, this);
 
+    // Check if bluetooth adapter is on
+    QVariant poweredVariant = adapterInterface.property("Powered");
+    if (poweredVariant.isValid()) {
+        bool powered = poweredVariant.toBool();
+        if (!powered) {
+            qDebug() << "Bluetooth is off";
+            emit bluetoothOff();
+            emit discoveryStopped();
+            return;
+        }
+    }
+
+    // Start the discovery
     QDBusMessage startDiscovery = adapterInterface.call("StartDiscovery");
     if (startDiscovery.type() == QDBusMessage::ErrorMessage) {
         qDebug() << "Failed to start device discovery:" << startDiscovery.errorMessage();
+        emit discoveryStopped();
         return;
     }
 

@@ -28,11 +28,13 @@ SOURCES += src/harbour-skruuvi.cpp \
 
 DISTFILES += qml/harbour-skruuvi.qml \
     qml/cover/CoverPage.qml \
+    qml/pages/AboutPage.qml \
     qml/pages/GetDataPage.qml \
+    qml/pages/GraphPage.qml \
     qml/pages/SelectDevicePage.qml \
-    qml/pages/plotDataPage.qml \
-    qml/pages/GraphData.qml \
-    qml/pages/Axis.qml \
+    qml/pages/PlotDataPage.qml \
+    qml/modules/GraphData/GraphData.qml \
+    qml/modules/GraphData/Axis.qml \
     rpm/harbour-skruuvi.changes.in \
     rpm/harbour-skruuvi.changes.run.in \
     rpm/harbour-skruuvi.spec \
