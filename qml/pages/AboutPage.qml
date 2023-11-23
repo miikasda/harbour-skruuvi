@@ -5,12 +5,24 @@ import "../modules/Opal/About" as A
 A.AboutPageBase {
     appName: "Skruuvi"
     appIcon: Qt.resolvedUrl("images/skruuvi-icon.png")
-    appVersion: "1.1"
+    appVersion: "1.2.0"
     description: "Reader for Ruuvi sensors on Sailfish OS"
     authors: "Miika Malin"
     licenses: A.License { spdxId: "GPL-3.0-or-later" }
     changelogItems: [
         // add new entries at the top
+        A.ChangelogItem {
+            version: "v1.2.0"
+            date: "2023-11-23"
+            paragraphs: "Changed to semantic versioning starting from this release. Changes: " +
+                        "Added about page (opens by pressing Skruuvi-logo), support for " +
+                        "fullscreen plots (press the graph to open it), notification if " +
+                        "bluetooth is off when scanning for devices, support for CSV exports and " +
+                        "support for selecting only start or end time for plot. Fixed negative " +
+                        "temperature readings. Also other small tweaks, for full change history " +
+                        "check the github release."
+        },
+
         A.ChangelogItem {
             version: "v1.1"
             date: "2023-07-04"
