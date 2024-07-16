@@ -10,7 +10,7 @@ https://docs.ruuvi.com/communication/bluetooth-connection
 
 License:
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2024  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -43,8 +43,9 @@ ALL_SENSORS = 0x3A
 # Charasteristic UUIDS
 UART_RX_CHAR_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 UART_TX_CHAR_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
-# Magic value for log read
-LOG_READ = 0x11
+# Magic values
+LOG_READ = 0x11  # Log read command
+ADV_DATA = 0x05  # Header information for advertisement data
 
 
 class RuuviTagReader:
@@ -97,6 +98,18 @@ class RuuviTagReader:
                                             "data_received_amount",
                                             self.data_received_amount
                                         ])
+            elif data[0] == ADV_DATA:
+                if len(data) != 18:
+                    print("Wrong advertisement data size", flush=True)
+                else:
+                    print("Advertisement data received", flush=True)
+                    dat = struct.unpack('>BhHHhhhHBH', data)
+                    voltage = ((dat[7] >> 5) + 1600) / 1000
+                    movement_counter = dat[8]
+                    pyotherside.send([
+                                      "extra_data",
+                                      round(voltage, 2), movement_counter
+                                    ])
 
     async def read_log_data(self):
         print(f"Searching for Ruuvi {self.device_address}", flush=True)

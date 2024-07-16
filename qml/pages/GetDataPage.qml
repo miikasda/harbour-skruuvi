@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2024  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -262,6 +262,10 @@ Page {
                 loadingScreen.text = "Connected, fetching data"
             } else if (data[0] === "data_received_amount") {
                 loadingScreen.text = "Connected, received " + data[1] + " readings"
+            } else if (data[0] === "extra_data") {
+                // Update voltage and movement counter
+                db.setVoltage(selectedDevice.deviceAddress, data[1])
+                db.setMovement(selectedDevice.deviceAddress, data[2])
             } else if (data[0] === "failed") {
                 loadingScreen.running = false;
                 failureOverlay.visible = true;

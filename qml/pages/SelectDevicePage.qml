@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2024  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -112,6 +112,8 @@ Page {
                     deviceModel.append({
                         deviceName: device.deviceName,
                         deviceAddress: device.deviceAddress,
+                        deviceVoltage: device.deviceVoltage,
+                        deviceMovement: device.deviceMovement,
                         showBluetoothIcon: false
                     });
                 }
@@ -164,6 +166,7 @@ Page {
                     }
 
                     Image {
+                        id: btIcon
                         source: "image://theme/icon-s-bluetooth"
                         width: Theme.iconSizeSmall
                         height: Theme.iconSizeSmall
@@ -172,6 +175,32 @@ Page {
                             right: parent.right
                             rightMargin: Theme.paddingMedium
                             verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    Image {
+                        id: batteryIcon
+                        source: "image://theme/icon-m-battery"
+                        width: Theme.iconSizeSmall
+                        height: Theme.iconSizeSmall
+                        anchors {
+                            left: topLabel.right
+                            leftMargin: Theme.paddingMedium
+                            verticalCenter: parent.verticalCenter
+                            verticalCenterOffset: -topLabel.height / 2
+                        }
+                    }
+
+                    Image {
+                        id: movementIcon
+                        source: "image://theme/icon-s-sync"
+                        width: Theme.iconSizeSmall
+                        height: Theme.iconSizeSmall
+                        anchors {
+                            left: voltageLabel.right
+                            leftMargin: Theme.paddingMedium
+                            verticalCenter: parent.verticalCenter
+                            verticalCenterOffset: -topLabel.height / 2
                         }
                     }
 
@@ -185,6 +214,25 @@ Page {
                     }
 
                     Label {
+                        id: voltageLabel
+                        text: model.deviceVoltage + " V"
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: -topLabel.height / 2
+                        anchors.left: batteryIcon.right
+                        anchors.leftMargin: Theme.paddingSmall
+                    }
+
+                    Label {
+                        id: movementLabel
+                        text: model.deviceMovement + " Moves"
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: -topLabel.height / 2
+                        anchors.left: movementIcon.right
+                        anchors.leftMargin: Theme.paddingSmall
+                    }
+
+                    Label {
+                        id: bottomLabel
                         anchors.top: topLabel.bottom
                         text: model.deviceAddress
                         font.pixelSize: Theme.fontSizeSmall
@@ -302,6 +350,37 @@ Page {
     }
 
     Connections {
+        target: db
+        onVoltageUpdated: {
+            // Find the device with the matching mac address in the model
+            var deviceFound = false;
+            for (var i = 0; i < deviceModel.count; i++) {
+                var device = deviceModel.get(i);
+                if (device.deviceAddress === mac) {
+                    deviceFound = true;
+                    // Update the voltage for the matched device
+                    deviceModel.setProperty(i, "deviceVoltage", voltage.toString());
+                    console.log("Voltage updated for " + mac);
+                    break;
+                }
+            }
+        }
+        onMovementUpdated: {
+            var deviceFound = false;
+            for (var i = 0; i < deviceModel.count; i++) {
+                var device = deviceModel.get(i);
+                if (device.deviceAddress === mac) {
+                    deviceFound = true;
+                    // Update the movement for the matched device
+                    deviceModel.setProperty(i, "deviceMovement", movement.toString());
+                    console.log("Movement updated for " + mac);
+                    break;
+                }
+            }
+        }
+    }
+
+    Connections {
         target: ld
         onDeviceFound: {
             // Check if a device with the same address already exists in the model
@@ -320,6 +399,8 @@ Page {
                 deviceModel.append({
                     deviceName: deviceName,
                     deviceAddress: deviceAddress,
+                    deviceVoltage: "NA",
+                    deviceMovement: "NA",
                     showBluetoothIcon: true
                 });
             }
