@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2024  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -77,12 +77,59 @@ database::database(QObject* parent) : QObject(parent) {
                                           "FOREIGN KEY (device) REFERENCES devices(mac))";
     executeQuery(createAirPressureTableQuery);
 
+    // Colums added after initial release needs to be appended
+    checkAndAddColumn("devices", "voltage", "REAL");
+    checkAndAddColumn("devices", "movement", "INT");
+
 }
 
 void database::executeQuery(const QString& queryStr) {
     QSqlQuery query(db);
     if (!query.exec(queryStr)) {
         qDebug() << "Error executing query:" << query.lastError().text();
+    }
+}
+
+void database::checkAndAddColumn(const QString &tableName, const QString &columnName, const QString &columnType) {
+    QSqlQuery query(db);
+    query.exec("PRAGMA table_info(" + tableName + ")");
+    bool columnExists = false;
+    while (query.next()) {
+        if (query.value(1).toString() == columnName) {
+            columnExists = true;
+            break;
+        }
+    }
+    if (!columnExists) {
+        qDebug() << "Adding column " << columnName << " to table " << tableName;
+        QString alterTableQuery = "ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnType;
+        executeQuery(alterTableQuery);
+    }
+}
+
+void database::setVoltage(const QString &mac, double voltage) {
+    QSqlQuery query(db);
+    query.prepare("UPDATE devices SET voltage = :voltage WHERE mac = :mac");
+    query.bindValue(":voltage", voltage);
+    query.bindValue(":mac", mac);
+
+    if (!query.exec()) {
+        qDebug() << "Error setting voltage:" << query.lastError().text();
+    } else {
+        emit voltageUpdated(mac, voltage); // Emit the new voltage reading
+    }
+}
+
+void database::setMovement(const QString &mac, int movement) {
+    QSqlQuery query(db);
+    query.prepare("UPDATE devices SET movement = :movement WHERE mac = :mac");
+    query.bindValue(":movement", movement);
+    query.bindValue(":mac", mac);
+
+    if (!query.exec()) {
+        qDebug() << "Error setting movement:" << query.lastError().text();
+    } else {
+        emit movementUpdated(mac, movement); // Emit the new movement reading
     }
 }
 
@@ -141,16 +188,20 @@ QVariantList database::getDevices()
 {
     QVariantList devices;
 
-    QString selectQuery = "SELECT mac, name FROM devices";
+    QString selectQuery = "SELECT mac, name, voltage, movement FROM devices";
     QSqlQuery query(db);
     if (query.exec(selectQuery)) {
         while (query.next()) {
             QString mac = query.value(0).toString();
             QString name = query.value(1).toString();
+            QString voltage = query.value("voltage").isNull() ? "NA" : QString::number(query.value("voltage").toDouble());
+            QString movement = query.value("movement").isNull() ? "NA" : QString::number(query.value("movement").toInt());
 
             QVariantMap device;
             device["deviceName"] = name;
             device["deviceAddress"] = mac;
+            device["deviceVoltage"] = voltage;
+            device["deviceMovement"] = movement;
 
             devices.append(device);
         }

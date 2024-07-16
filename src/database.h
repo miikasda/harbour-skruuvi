@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2024  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -37,12 +37,17 @@ public:
     Q_INVOKABLE void renameDevice(const QString deviceAddress, const QString newDeviceName);
     Q_INVOKABLE void removeDevice(const QString deviceAddress);
     Q_INVOKABLE QString exportCSV(const QString deviceAddress, const QString deviceName, int startTime, int endTime);
+    Q_INVOKABLE void setVoltage(const QString &mac, double voltage);
+    Q_INVOKABLE void setMovement(const QString &mac, int movement);
 
 private:
     QSqlDatabase db;
+    void checkAndAddColumn(const QString &tableName, const QString &columnName, const QString &columnType);
 
 signals:
     void inputFinished();
+    void voltageUpdated(const QString &mac, double voltage);
+    void movementUpdated(const QString &mac, int movement);
 };
 
 #endif // DATABASE_H
