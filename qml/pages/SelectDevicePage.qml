@@ -140,7 +140,7 @@ Page {
             // Define how the ListItems looks like
             delegate: ListItem {
                 id: listItem
-                contentHeight: Theme.itemSizeMedium
+                contentHeight: Theme.itemSizeExtraLarge
                 width: parent.width
 
                 Item {
@@ -157,8 +157,8 @@ Page {
                     Image {
                         id: icon
                         source: "images/ruuvi-tag-menu-v2.png"
-                        width: Theme.iconSizeLarge
-                        height: Theme.iconSizeLarge * 0.8
+                        width: Theme.iconSizeExtraLarge
+                        height: Theme.iconSizeExtraLarge * 0.8
 
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
@@ -178,66 +178,56 @@ Page {
                         }
                     }
 
-                    Image {
-                        id: batteryIcon
-                        source: "image://theme/icon-m-battery"
-                        width: Theme.iconSizeSmall
-                        height: Theme.iconSizeSmall
-                        anchors {
-                            left: topLabel.right
-                            leftMargin: Theme.paddingMedium
-                            verticalCenter: parent.verticalCenter
-                            verticalCenterOffset: -topLabel.height / 2
-                        }
-                    }
-
-                    Image {
-                        id: movementIcon
-                        source: "image://theme/icon-s-sync"
-                        width: Theme.iconSizeSmall
-                        height: Theme.iconSizeSmall
-                        anchors {
-                            left: voltageLabel.right
-                            leftMargin: Theme.paddingMedium
-                            verticalCenter: parent.verticalCenter
-                            verticalCenterOffset: -topLabel.height / 2
-                        }
-                    }
-
-                    Label {
-                        id: topLabel
-                        text: model.deviceName
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.verticalCenterOffset: -topLabel.height / 2
+                    Column {
                         anchors.left: icon.right
                         anchors.leftMargin: Theme.paddingMedium
-                    }
-
-                    Label {
-                        id: voltageLabel
-                        text: model.deviceVoltage + " V"
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.verticalCenterOffset: -topLabel.height / 2
-                        anchors.left: batteryIcon.right
-                        anchors.leftMargin: Theme.paddingSmall
-                    }
 
-                    Label {
-                        id: movementLabel
-                        text: model.deviceMovement + " Moves"
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.verticalCenterOffset: -topLabel.height / 2
-                        anchors.left: movementIcon.right
-                        anchors.leftMargin: Theme.paddingSmall
-                    }
+                        Label {
+                            id: topLabel
+                            text: model.deviceName
+                        }
 
-                    Label {
-                        id: bottomLabel
-                        anchors.top: topLabel.bottom
-                        text: model.deviceAddress
-                        font.pixelSize: Theme.fontSizeSmall
-                        anchors.left: icon.right
-                        anchors.leftMargin: Theme.paddingMedium
+                        Row {
+                            spacing: Theme.paddingSmall
+
+                            Image {
+                                id: batteryIcon
+                                source: "image://theme/icon-m-battery"
+                                width: Theme.iconSizeSmall
+                                height: Theme.iconSizeSmall
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+
+                            Label {
+                                id: voltageLabel
+                                text: model.deviceVoltage + " V"
+                                font.pixelSize: Theme.fontSizeSmall
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+
+                            Image {
+                                id: movementIcon
+                                source: "image://theme/icon-s-sync"
+                                width: Theme.iconSizeSmall
+                                height: Theme.iconSizeSmall
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+
+                            Label {
+                                id: movementLabel
+                                text: model.deviceMovement + " Moves"
+                                font.pixelSize: Theme.fontSizeSmall
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+
+                        Label {
+                            id: bottomLabel
+                            text: model.deviceAddress
+                            font.pixelSize: Theme.fontSizeSmall
+                            color: Theme.secondaryHighlightColor
+                        }
                     }
                 }
 
