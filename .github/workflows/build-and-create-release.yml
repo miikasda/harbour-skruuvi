@@ -69,7 +69,7 @@ jobs:
           arch: i486
       - name: Upload build result
         id: upload
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: rpm-build-result
           path: RPMS
