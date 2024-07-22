@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2024  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -121,6 +121,43 @@ Page {
                 leftPadding: leftMargin
                 color: Theme.highlightColor
                 text: selectedDevice.deviceName
+            }
+
+            Row {
+                spacing: Theme.paddingSmall
+                anchors.left: parent.left
+                anchors.leftMargin: leftMargin
+
+                Image {
+                    id: batteryIcon
+                    source: "image://theme/icon-m-battery"
+                    width: Theme.iconSizeSmall
+                    height: Theme.iconSizeSmall
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Label {
+                    id: voltageLabel
+                    text: selectedDevice.deviceVoltage + " V"
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Theme.highlightColor
+                }
+
+                Image {
+                    id: movementIcon
+                    source: "image://theme/icon-s-sync"
+                    width: Theme.iconSizeSmall
+                    height: Theme.iconSizeSmall
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Label {
+                    id: movementLabel
+                    text: selectedDevice.deviceMovement + " Moves"
+                    font.pixelSize: Theme.fontSizeSmall
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Theme.highlightColor
+                }
             }
 
             Label {

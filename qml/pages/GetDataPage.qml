@@ -265,7 +265,9 @@ Page {
             } else if (data[0] === "extra_data") {
                 // Update voltage and movement counter
                 db.setVoltage(selectedDevice.deviceAddress, data[1])
+                selectedDevice.deviceVoltage = data[1]
                 db.setMovement(selectedDevice.deviceAddress, data[2])
+                selectedDevice.deviceMovement = data[2]
             } else if (data[0] === "failed") {
                 loadingScreen.running = false;
                 failureOverlay.visible = true;
