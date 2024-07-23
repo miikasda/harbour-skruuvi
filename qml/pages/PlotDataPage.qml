@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2024  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ import Sailfish.Share 1.0
 import "../modules/GraphData"
 
 Page {
+    id: plotDataPage
 
     property var startTime: pageStack.pop().startTime
     property var endTime: pageStack.pop().endTime
@@ -34,15 +35,9 @@ Page {
     property var humidityData: []
     property var pressureData: []
 
-    function calculateUnixTimestamp(day, month, year, start) {
+    function calculateUnixTimestamp(minute, hour, day, month, year) {
         var date = new Date(year, month - 1, day);
-        if (start) {
-            // Set the time to the start of the day (00:00:00)
-            date.setHours(0, 0, 0, 0);
-        } else {
-            // Set the time to the end of the day (23:59:59)
-            date.setHours(23, 59, 59, 999);
-        }
+        date.setHours(hour, minute, 0, 0);
         var unixTimestamp = Math.floor(date.getTime() / 1000);
         return unixTimestamp;
     }
@@ -121,6 +116,43 @@ Page {
                 leftPadding: leftMargin
                 color: Theme.highlightColor
                 text: selectedDevice.deviceName
+            }
+
+            Row {
+                spacing: Theme.paddingSmall
+                anchors.left: parent.left
+                anchors.leftMargin: leftMargin
+
+                Image {
+                    id: batteryIcon
+                    source: "image://theme/icon-m-battery"
+                    width: Theme.iconSizeSmall
+                    height: Theme.iconSizeSmall
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Label {
+                    id: voltageLabel
+                    text: selectedDevice.deviceVoltage + " V"
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Theme.highlightColor
+                }
+
+                Image {
+                    id: movementIcon
+                    source: "image://theme/icon-s-sync"
+                    width: Theme.iconSizeSmall
+                    height: Theme.iconSizeSmall
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Label {
+                    id: movementLabel
+                    text: selectedDevice.deviceMovement + " Moves"
+                    font.pixelSize: Theme.fontSizeSmall
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: Theme.highlightColor
+                }
             }
 
             Label {
@@ -213,21 +245,28 @@ Page {
                     anchors.top: parent.top
                     width: parent.width - leftMargin - rightMargin
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Start date"
+                    text: "Start time"
                     property bool clicked: false
 
                     onClicked: {
-                        var dialog = pageStack.push(startPicker, {})
-                        dialog.accepted.connect(function() {
-                            startDateButton.text = "Start date: " + dialog.dateText
-                            startTime = calculateUnixTimestamp(dialog.day, dialog.month, dialog.year, true)
-                            startDateButton.clicked = true
+                        var startDatePicker = pageStack.push("Sailfish.Silica.DatePickerDialog", {})
+                        startDatePicker.accepted.connect(function() {
+                            // Ask for time
+                            var startTimePicker = pageStack.push("Sailfish.Silica.TimePickerDialog", {
+                                hourMode: DateTime.TwentyFourHours,
+                                hour: 0,
+                                minute: 0
+                            })
+                            // Set plotDataPage as return destination on accept,
+                            // otherwise we will return to datepicker
+                            startTimePicker.acceptDestinationAction = PageStackAction.Pop
+                            startTimePicker.acceptDestination = plotDataPage
+                            startTimePicker.accepted.connect(function() {
+                                startDateButton.text = "Start time: " + startDatePicker.dateText + " " + startTimePicker.timeText
+                                startTime = calculateUnixTimestamp(startTimePicker.minute, startTimePicker.hour, startDatePicker.day, startDatePicker.month, startDatePicker.year)
+                                startDateButton.clicked = true
+                            })
                         })
-                    }
-
-                    Component {
-                        id: startPicker
-                        DatePickerDialog {}
                     }
                 }
 
@@ -244,21 +283,26 @@ Page {
                     anchors.top: whiteSpace.bottom
                     width: parent.width - leftMargin - rightMargin
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "End date"
+                    text: "End time"
                     property bool clicked: false
 
                     onClicked: {
-                        var dialog = pageStack.push(endPicker, {})
-                        dialog.accepted.connect(function() {
-                            endDateButton.text = "End date: " + dialog.dateText
-                            endTime = calculateUnixTimestamp(dialog.day, dialog.month, dialog.year, false)
-                            endDateButton.clicked = true
+                        var endDatePicker = pageStack.push("Sailfish.Silica.DatePickerDialog", {})
+                        endDatePicker.accepted.connect(function() {
+                            // Ask for time
+                            var endTimePicker = pageStack.push("Sailfish.Silica.TimePickerDialog", {
+                                hourMode: DateTime.TwentyFourHours,
+                                hour: 23,
+                                minute: 59
+                            })
+                            endTimePicker.acceptDestinationAction = PageStackAction.Pop
+                            endTimePicker.acceptDestination = plotDataPage
+                            endTimePicker.accepted.connect(function() {
+                                endDateButton.text = "End time: " + endDatePicker.dateText + " " + endTimePicker.timeText
+                                endTime = calculateUnixTimestamp(endTimePicker.minute, endTimePicker.hour, endDatePicker.day, endDatePicker.month, endDatePicker.year)
+                                endDateButton.clicked = true
+                            })
                         })
-                    }
-
-                    Component {
-                        id: endPicker
-                        DatePickerDialog {}
                     }
                 }
             }
