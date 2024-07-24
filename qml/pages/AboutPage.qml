@@ -5,12 +5,18 @@ import "../modules/Opal/About" as A
 A.AboutPageBase {
     appName: "Skruuvi"
     appIcon: Qt.resolvedUrl("images/skruuvi-icon.png")
-    appVersion: "1.2.0"
+    appVersion: "1.3.0"
     description: "Reader for Ruuvi sensors on Sailfish OS"
     authors: "Miika Malin"
     licenses: A.License { spdxId: "GPL-3.0-or-later" }
     changelogItems: [
         // add new entries at the top
+        A.ChangelogItem {
+            version: "v1.3.0"
+            date: "2024-07-24"
+            paragraphs: "Added support for reading voltage and movement counter from RuuviTag, " +
+                        "and enabled time selection in data plotting."
+        },
         A.ChangelogItem {
             version: "v1.2.0"
             date: "2023-11-23"
@@ -22,7 +28,6 @@ A.AboutPageBase {
                         "temperature readings. Also other small tweaks, for full change history " +
                         "check the github release."
         },
-
         A.ChangelogItem {
             version: "v1.1"
             date: "2023-07-04"
