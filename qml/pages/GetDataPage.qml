@@ -63,6 +63,7 @@ Page {
         contentHeight: column.height
 
         PullDownMenu {
+            id: pdMenu
             visible: fetchAllSwitch.checked || (pickedHour !== -1 && pickedMinute !== -1)
             MenuItem {
                 text: "Fetch data"
@@ -222,6 +223,7 @@ Page {
             onClicked: {
                 failureOverlay.visible = false;
                 column.visible = true;
+                pdMenu.visible = true;
             }
         }
     }
@@ -273,6 +275,7 @@ Page {
                 loadingScreen.running = false;
                 failureOverlay.visible = true;
                 column.visible = false;
+                pdMenu.visible = false;
                 failureText.text = data[1]
             }
        }
