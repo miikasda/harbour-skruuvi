@@ -202,6 +202,7 @@ Page {
             color: Theme.highlightColor
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: parent.top
+            anchors.topMargin: Theme.paddingLarge
         }
 
         Text {
