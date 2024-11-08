@@ -147,6 +147,49 @@ void database::inputRawData(QString deviceAddress, QString deviceName, const QVa
     thread->start();
 }
 
+void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturerData) {
+    // WORK IN PROGRESS SO FAR WE ONLY PRINT THE VALUES
+    // Documentation for data parsing is at https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2
+
+    // Parse data
+    int dataFormat = manufacturerData[0];
+    int16_t temperatureData = (manufacturerData[1] << 8) | manufacturerData[2];
+    float temperature = static_cast<float>(temperatureData) * 0.005;
+    uint16_t humidityData = (manufacturerData[3] << 8) | manufacturerData[4];
+    float humidity = static_cast<float>(humidityData) * 0.0025;
+    uint16_t pressureData = (manufacturerData[5] << 8) | manufacturerData[6];
+    int pressure = static_cast<int>(pressureData) + 50000;
+    int16_t accDataX = (manufacturerData[7] << 8) | manufacturerData[8];
+    float accX = static_cast<float>(accDataX) / 1000;
+    int16_t accDataY = (manufacturerData[9] << 8) | manufacturerData[10];
+    float accY = static_cast<float>(accDataY) / 1000;
+    int16_t accDataZ = (manufacturerData[11] << 8) | manufacturerData[12];
+    float accZ = static_cast<float>(accDataZ) / 1000;
+    uint16_t BatteryAndTxData = (manufacturerData[13] << 8) | manufacturerData[14];
+    int txPower = ((BatteryAndTxData & 0x1F) * 2) - 40;
+    float battery = (static_cast<float>(BatteryAndTxData >> 5) / 1000) + 1.6;
+    int movementCounter = manufacturerData[15];
+    int measurementSequenceNumber = (manufacturerData[16] << 8) | manufacturerData[17];
+    char macAddress[18];
+    sprintf(macAddress, "%02X:%02X:%02X:%02X:%02X:%02X",
+            manufacturerData[18], manufacturerData[19], manufacturerData[20], manufacturerData[21], manufacturerData[22], manufacturerData[23]);
+
+    // Print data
+    qDebug() << "ManufacturerData at " << QTime::currentTime().toString();
+    qDebug() << "Data format: " << dataFormat;
+    qDebug() << "Temperature: " << temperature;
+    qDebug() << "Humidity: " << humidity;
+    qDebug() << "Pressure: " << pressure;
+    qDebug() << "Acceleration X: " << accX;
+    qDebug() << "Acceleration Y: " << accY;
+    qDebug() << "Acceleration Z: " << accZ;
+    qDebug() << "Battery: " << battery;
+    qDebug() << "Tx Power: " << txPower;
+    qDebug() << "Movement Counter: " << movementCounter;
+    qDebug() << "Measurement Sequence Number: " << measurementSequenceNumber;
+    qDebug() << "MAC Address: " << macAddress;
+}
+
 void database::insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData) {
     // Loop over the sensor data and insert into the table
     for (const QPair<int, double>& item : sensorData) {

@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2024  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@
 
 #include "listdevices.h"
 #include "database.h"
+#include "backgroundscanner.h"
 
 int main(int argc, char *argv[])
 {
@@ -45,13 +46,13 @@ int main(int argc, char *argv[])
     QScopedPointer<QGuiApplication> app(SailfishApp::application(argc, argv));
     QScopedPointer<QQuickView> v(SailfishApp::createView());
 
-    // Register listdevices c++ class for QML
+    // Register c++ classes for QML
     listdevices ld;
     v->engine()->rootContext()->setContextProperty("ld", &ld);
-
-    // Register database c++ class for QML
     database db;
     v->engine()->rootContext()->setContextProperty("db", &db);
+    backgroundscanner bs;
+    v->engine()->rootContext()->setContextProperty("bs", &bs);
 
     // Start the application.
     v->setSource(SailfishApp::pathTo("qml/harbour-skruuvi.qml"));

@@ -137,6 +137,30 @@ Page {
                 }
             }
 
+            // TODO: Initial buttons to test background scanning, later this will be toggled from settings page
+            Button {
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.leftMargin: leftMargin
+                text: "Start BS"
+                onClicked: {
+                    clearBluetoothIcons();
+                    busyIndicator.visible = true;
+                    busyIndicator.running = true;
+                    btOffLabel.visible = false;
+                    bs.startScan();
+                }
+            }
+            Button {
+                anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                anchors.rightMargin: rightMargin
+                text: "Stop BS"
+                onClicked: {
+                    bs.stopScan();
+                }
+            }
+
             // Define how the ListItems looks like
             delegate: ListItem {
                 id: listItem
@@ -402,6 +426,16 @@ Page {
         }
         onBluetoothOff: {
             btOffLabel.visible = true;
+        }
+    }
+
+    Connections {
+        target: bs
+        onBluetoothOff: {
+            btOffLabel.visible = true;
+        }
+        onDiscoveryStopped: {
+            busyIndicator.visible = false;
         }
     }
 }
