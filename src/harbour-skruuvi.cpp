@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     v->engine()->rootContext()->setContextProperty("ld", &ld);
     database db;
     v->engine()->rootContext()->setContextProperty("db", &db);
-    backgroundscanner bs;
+    backgroundscanner bs(nullptr, &db);
     v->engine()->rootContext()->setContextProperty("bs", &bs);
 
     // Start the application.
