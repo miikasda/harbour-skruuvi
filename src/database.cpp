@@ -148,7 +148,7 @@ void database::inputRawData(QString deviceAddress, QString deviceName, const QVa
 }
 
 void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturerData) {
-    // WORK IN PROGRESS SO FAR WE ONLY PRINT THE VALUES
+    // WORK IN PROGRESS: No data validation or support for unseen sensors yet
     // Documentation for data parsing is at https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2
 
     // Parse data
@@ -188,6 +188,12 @@ void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturer
     qDebug() << "Movement Counter: " << movementCounter;
     qDebug() << "Measurement Sequence Number: " << measurementSequenceNumber;
     qDebug() << "MAC Address: " << macAddress;
+
+    // Send to database
+    int timestamp = QDateTime::currentDateTime().toTime_t();
+    insertSensorData(macAddress, "temperature", {qMakePair(timestamp, temperature)});
+    insertSensorData(macAddress, "humidity", {qMakePair(timestamp, humidity)});
+    insertSensorData(macAddress, "air_pressure", {qMakePair(timestamp, pressure)});
 }
 
 void database::insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData) {
