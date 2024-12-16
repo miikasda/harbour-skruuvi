@@ -158,7 +158,7 @@ void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturer
     uint16_t humidityData = (manufacturerData[3] << 8) | manufacturerData[4];
     float humidity = static_cast<float>(humidityData) * 0.0025;
     uint16_t pressureData = (manufacturerData[5] << 8) | manufacturerData[6];
-    int pressure = static_cast<int>(pressureData) + 50000;
+    float pressure = (static_cast<int>(pressureData) + 50000) / 100.0;
     int16_t accDataX = (manufacturerData[7] << 8) | manufacturerData[8];
     float accX = static_cast<float>(accDataX) / 1000;
     int16_t accDataY = (manufacturerData[9] << 8) | manufacturerData[10];
