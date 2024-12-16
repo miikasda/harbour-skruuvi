@@ -25,7 +25,7 @@
 
 
 database::database(QObject* parent) : QObject(parent) {
-    QSqlDatabase db = QSqlDatabase(QSqlDatabase::addDatabase("QSQLITE"));
+    db = QSqlDatabase::addDatabase("QSQLITE");
 
     // Setup the database path
     QString dbName = "ruuviData.sqlite";
@@ -195,7 +195,6 @@ void database::insertSensorData(QString deviceAddress, QString sensor, const QLi
     for (const QPair<int, double>& item : sensorData) {
         int timestamp = item.first;
         double value = item.second;
-
         QString insertQuery = "INSERT OR IGNORE INTO " + sensor + " (device, timestamp, value) "
                               "VALUES ('" + deviceAddress + "', " + QString::number(timestamp) + ", " + QString::number(value) + ")";
         executeQuery(insertQuery);
