@@ -80,7 +80,7 @@ database::database(QObject* parent) : QObject(parent) {
     // Colums added after initial release needs to be appended
     checkAndAddColumn("devices", "voltage", "REAL");
     checkAndAddColumn("devices", "movement", "INT");
-
+    checkAndAddColumn("devices", "sync_time", "INT");
 }
 
 void database::executeQuery(const QString& queryStr) {
@@ -131,6 +131,12 @@ void database::setMovement(const QString &mac, int movement) {
     } else {
         emit movementUpdated(mac, movement); // Emit the new movement reading
     }
+}
+
+void database::setLastSync(const QString& deviceAddress, int timestamp) {
+    QString updateQuery = "UPDATE devices SET sync_time = " + QString::number(timestamp) +
+                          " WHERE mac = '" + deviceAddress + "'";
+    executeQuery(updateQuery);
 }
 
 void database::inputRawData(QString deviceAddress, QString deviceName, const QVariantList& data) {
@@ -285,6 +291,19 @@ int database::getLastMeasurement(const QString deviceAddress, const QString sens
         qDebug() << "Error executing getLastMeasurement query:" << query.lastError().text();
     }
     return 1; // Return 1 if an error occurred or no measurement was found
+}
+
+int database::getLastSync(const QString deviceAddress) {
+    QString selectQuery = "SELECT sync_time FROM devices WHERE mac = '" + deviceAddress + "'";
+    QSqlQuery query(db);
+    if (query.exec(selectQuery)) {
+        if (query.next()) {
+            return query.value(0).toInt();
+        }
+    } else {
+        qDebug() << "Error executing getLastMeasurement query:" << query.lastError().text();
+    }
+    return 0; // Return 0 if an error occurred or no sync time available
 }
 
 void database::renameDevice(const QString deviceAddress, const QString newDeviceName) {
