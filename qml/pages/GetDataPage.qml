@@ -289,7 +289,7 @@ Page {
                 // Call the C++ function with the values
                 db.inputRawData(selectedDevice.deviceAddress, selectedDevice.deviceName, data);
                 // Update the sync time to database and to the label
-                db.setLastSync(selectedDevice.deviceAddress, syncStart);
+                db.setLastSync(selectedDevice.deviceAddress, selectedDevice.deviceName, syncStart);
                 lastSyncLabel.text = formatLastSyncLabel(syncStart);
             } else if (data[0] === "connected") {
                 loadingScreen.text = "Connected, fetching data"

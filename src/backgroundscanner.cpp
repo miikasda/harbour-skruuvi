@@ -147,6 +147,7 @@ void backgroundscanner::onInterfacesAdded(const QDBusObjectPath &objectPath, con
             const QDBusArgument &dbusArgs = firstReplyVariant.value<QDBusArgument>();
             std::array<uint8_t, 24> manufacturerData = parseManufacturerData(dbusArgs);
             qDebug() << "Backgroundscanner: Got new ManufacturerData (onInterfacesAdded):";
+            db->addDevice(deviceAddress, deviceName);
             db->inputManufacturerData(manufacturerData);
 
             // Connect to PropertiesChanged for this specific device so we get the manufacturerData updates

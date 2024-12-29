@@ -107,6 +107,13 @@ void database::checkAndAddColumn(const QString &tableName, const QString &column
     }
 }
 
+void database::addDevice(const QString &deviceAddress, const QString &deviceName) {
+    qDebug() << "Adding device to db: " << deviceAddress << " " << deviceName;
+    QString createDeviceQuery = "INSERT OR IGNORE INTO devices (mac, name) "
+                                "VALUES ('" + deviceAddress + "', '" + deviceName + "')";
+    executeQuery(createDeviceQuery);
+}
+
 void database::setVoltage(const QString &mac, double voltage) {
     QSqlQuery query(db);
     query.prepare("UPDATE devices SET voltage = :voltage WHERE mac = :mac");
@@ -133,7 +140,8 @@ void database::setMovement(const QString &mac, int movement) {
     }
 }
 
-void database::setLastSync(const QString& deviceAddress, int timestamp) {
+void database::setLastSync(const QString& deviceAddress, const QString& deviceName, int timestamp) {
+    addDevice(deviceAddress, deviceName);
     QString updateQuery = "UPDATE devices SET sync_time = " + QString::number(timestamp) +
                           " WHERE mac = '" + deviceAddress + "'";
     executeQuery(updateQuery);
@@ -154,7 +162,6 @@ void database::inputRawData(QString deviceAddress, QString deviceName, const QVa
 }
 
 void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturerData) {
-    // WORK IN PROGRESS: No data validation or support for unseen sensors yet
     // Documentation for data parsing is at https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2
 
     // Parse data
