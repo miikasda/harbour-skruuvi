@@ -159,6 +159,10 @@ void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturer
 
     // Parse data
     int dataFormat = manufacturerData[0];
+    if (dataFormat != 5) {
+        qDebug() << "Unknown data format: " << dataFormat;
+        return;
+    }
     int16_t temperatureData = (manufacturerData[1] << 8) | manufacturerData[2];
     float temperature = static_cast<float>(temperatureData) * 0.005;
     uint16_t humidityData = (manufacturerData[3] << 8) | manufacturerData[4];
@@ -198,8 +202,12 @@ void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturer
     // Send to database
     int timestamp = QDateTime::currentDateTime().toTime_t();
     insertSensorData(macAddress, "temperature", {qMakePair(timestamp, temperature)});
-    insertSensorData(macAddress, "humidity", {qMakePair(timestamp, humidity)});
-    insertSensorData(macAddress, "air_pressure", {qMakePair(timestamp, pressure)});
+    if (humidityData != 0xFFFF) {
+        insertSensorData(macAddress, "humidity", {qMakePair(timestamp, humidity)});
+    }
+    if (pressureData != 0xFFFF) {
+        insertSensorData(macAddress, "air_pressure", {qMakePair(timestamp, pressure)});
+    }
 }
 
 void database::insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData) {
