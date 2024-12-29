@@ -43,4 +43,5 @@ private slots:
 private:
     QDBusConnection bus;
     database* db;
+    bool scanning;
 };

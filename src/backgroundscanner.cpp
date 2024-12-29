@@ -27,10 +27,8 @@ backgroundscanner::backgroundscanner(QObject *parent, database* db)
     : QObject(parent)
     , bus(QDBusConnection::systemBus())
     , db(db)
+    , scanning(false)
 {
-    // Connect the signal handler for DeviceFound signal
-    bus.connect("org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "InterfacesAdded",
-                                         this, SLOT(onInterfacesAdded(QDBusObjectPath, QVariantMap)));
 }
 
 std::array<uint8_t, 24> backgroundscanner::parseManufacturerData(const QDBusArgument &dbusArg) {
@@ -65,6 +63,7 @@ std::array<uint8_t, 24> backgroundscanner::parseManufacturerData(const QDBusArgu
 
 void backgroundscanner::startScan()
 {
+    qDebug() << "Starting background scan...";
     // Create the adapter interface
     QDBusInterface adapterInterface("org.bluez", "/org/bluez/hci0", "org.bluez.Adapter1", bus, this);
 
@@ -88,7 +87,10 @@ void backgroundscanner::startScan()
         return;
     }
 
-    qDebug() << "Starting background scan...";
+    // Connect the signal handler for DeviceFound signal
+    bus.connect("org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "InterfacesAdded",
+                this, SLOT(onInterfacesAdded(QDBusObjectPath, QVariantMap)));
+    scanning = true;
 }
 
 void backgroundscanner::stopScan()
@@ -102,12 +104,17 @@ void backgroundscanner::stopScan()
     }
 
     qDebug() << "Background scanning stopped";
+    scanning = false;
     // Emit the discoveryStopped signal
     emit discoveryStopped();
 }
 
 void backgroundscanner::onInterfacesAdded(const QDBusObjectPath &objectPath, const QVariantMap &interfaces)
 {
+    if (!scanning) {
+        qDebug() << "Received InterfacesAdded signal, but background scanner is not active.";
+        return;  // Ignore signals if not scanning
+    }
     if (interfaces.contains("org.bluez.Device1")) {
         QDBusInterface deviceInterface("org.bluez", objectPath.path(), "org.bluez.Device1", bus);
 
@@ -150,6 +157,10 @@ void backgroundscanner::onInterfacesAdded(const QDBusObjectPath &objectPath, con
 }
 
 void backgroundscanner::onPropertiesChanged(const QString &interface, const QVariantMap &changedProperties, const QStringList &) {
+    if (!scanning) {
+        qDebug() << "Received PropertiesChanged signal, but background scanner is not active.";
+        return;  // Ignore signals if not scanning
+    }
     if (interface.contains("org.bluez.Device1")) {
         // Check if "ManufacturerData" is in changedProperties
         if (!changedProperties.contains("ManufacturerData")) {
