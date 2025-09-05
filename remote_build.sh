@@ -92,6 +92,12 @@ echo
 # Step 3: Execute build command on remote host
 echo "Building on remote host..."
 ssh "$REMOTE_HOST" "/home/miika/SailfishOS/bin/sfdk config --push target $BUILD_TARGET && cd $REMOTE_BUILD_DIR && /home/miika/SailfishOS/bin/sfdk build $REMOTE_SOURCE_DIR"
+if [ $? -eq 0 ]; then
+    echo "  ✅ Build succeeded."
+else
+    echo "  ❌ Build failed."
+    exit 1
+fi
 echo
 
 
