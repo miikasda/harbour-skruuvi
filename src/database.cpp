@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023-2024  Miika Malin
+    Copyright (C) 2023-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -81,6 +81,15 @@ database::database(QObject* parent) : QObject(parent) {
     checkAndAddColumn("devices", "voltage", "REAL");
     checkAndAddColumn("devices", "movement", "INT");
     checkAndAddColumn("devices", "sync_time", "INT");
+    checkAndAddColumn("devices", "temperature", "REAL");
+    checkAndAddColumn("devices", "humidity", "REAL");
+    checkAndAddColumn("devices", "pressure", "REAL");
+    checkAndAddColumn("devices", "tx", "REAL");
+    checkAndAddColumn("devices", "acc_x", "REAL");
+    checkAndAddColumn("devices", "acc_y", "REAL");
+    checkAndAddColumn("devices", "acc_z", "REAL");
+    checkAndAddColumn("devices", "last_obs", "int");
+    checkAndAddColumn("devices", "meas_seq", "int");
 }
 
 void database::executeQuery(const QString& queryStr) {
@@ -112,6 +121,45 @@ void database::addDevice(const QString &deviceAddress, const QString &deviceName
     QString createDeviceQuery = "INSERT OR IGNORE INTO devices (mac, name) "
                                 "VALUES ('" + deviceAddress + "', '" + deviceName + "')";
     executeQuery(createDeviceQuery);
+}
+
+void database::updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX, 
+    double accY, double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp)
+{
+    QSqlQuery query(db);
+    query.prepare(
+        "UPDATE devices SET "
+        "temperature = :temperature, "
+        "humidity = :humidity, "
+        "pressure = :pressure, "
+        "acc_x = :accX, "
+        "acc_y = :accY, "
+        "acc_z = :accZ, "
+        "voltage = :voltage, "
+        "tx = :txPower, "
+        "movement = :movementCounter, "
+        "meas_seq = :measurementSequenceNumber, "
+        "last_obs = :timestamp "
+        "WHERE mac = :mac"
+    );
+
+    query.bindValue(":temperature", temperature);
+    query.bindValue(":humidity", humidity);
+    query.bindValue(":pressure", pressure);
+    query.bindValue(":accX", accX);
+    query.bindValue(":accY", accY);
+    query.bindValue(":accZ", accZ);
+    query.bindValue(":voltage", voltage);
+    query.bindValue(":txPower", txPower);
+    query.bindValue(":movementCounter", movementCounter);
+    query.bindValue(":measurementSequenceNumber", measurementSequenceNumber);
+    query.bindValue(":timestamp", timestamp);
+
+    query.bindValue(":mac", mac);
+
+    if (!query.exec()) {
+        qDebug() << "Error updating manufacturerdata to deviceDB:" << query.lastError().text();
+    }
 }
 
 void database::setVoltage(const QString &mac, double voltage) {
@@ -191,23 +239,11 @@ void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturer
     sprintf(macAddress, "%02X:%02X:%02X:%02X:%02X:%02X",
             manufacturerData[18], manufacturerData[19], manufacturerData[20], manufacturerData[21], manufacturerData[22], manufacturerData[23]);
 
-    // Print data
-    qDebug() << "ManufacturerData at " << QTime::currentTime().toString();
-    qDebug() << "Data format: " << dataFormat;
-    qDebug() << "Temperature: " << temperature;
-    qDebug() << "Humidity: " << humidity;
-    qDebug() << "Pressure: " << pressure;
-    qDebug() << "Acceleration X: " << accX;
-    qDebug() << "Acceleration Y: " << accY;
-    qDebug() << "Acceleration Z: " << accZ;
-    qDebug() << "Battery: " << battery;
-    qDebug() << "Tx Power: " << txPower;
-    qDebug() << "Movement Counter: " << movementCounter;
-    qDebug() << "Measurement Sequence Number: " << measurementSequenceNumber;
-    qDebug() << "MAC Address: " << macAddress;
-
-    // Send to database
+    // Update the device database with updateDevice
     int timestamp = QDateTime::currentDateTime().toTime_t();
+    updateDevice(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
+ 
+    // Send to database
     insertSensorData(macAddress, "temperature", {qMakePair(timestamp, temperature)});
     if (humidityData != 0xFFFF) {
         insertSensorData(macAddress, "humidity", {qMakePair(timestamp, humidity)});
@@ -215,6 +251,9 @@ void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturer
     if (pressureData != 0xFFFF) {
         insertSensorData(macAddress, "air_pressure", {qMakePair(timestamp, pressure)});
     }
+
+    // Emit signal with new readings
+    emit deviceDataUpdated(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
 }
 
 void database::insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData) {
@@ -257,7 +296,7 @@ QVariantList database::getDevices()
 {
     QVariantList devices;
 
-    QString selectQuery = "SELECT mac, name, voltage, movement FROM devices";
+    QString selectQuery = "SELECT * FROM devices";
     QSqlQuery query(db);
     if (query.exec(selectQuery)) {
         while (query.next()) {
@@ -265,12 +304,31 @@ QVariantList database::getDevices()
             QString name = query.value(1).toString();
             QString voltage = query.value("voltage").isNull() ? "NA" : QString::number(query.value("voltage").toDouble());
             QString movement = query.value("movement").isNull() ? "NA" : QString::number(query.value("movement").toInt());
+            QString temperature = query.value("temperature").isNull() ? "NA" : QString::number(query.value("temperature").toDouble());
+            QString humidity = query.value("humidity").isNull() ? "NA" : QString::number(query.value("humidity").toDouble());
+            QString pressure = query.value("pressure").isNull() ? "NA" : QString::number(query.value("pressure").toDouble());
+            QString tx = query.value("tx").isNull() ? "NA" : QString::number(query.value("tx").toDouble());
+            QString acc_x = query.value("acc_x").isNull() ? "NA" : QString::number(query.value("acc_x").toDouble());
+            QString acc_y = query.value("acc_y").isNull() ? "NA" : QString::number(query.value("acc_y").toDouble());
+            QString acc_z = query.value("acc_z").isNull() ? "NA" : QString::number(query.value("acc_z").toDouble());
+            QString last_obs = query.value("last_obs").isNull() ? "NA" : QString::number(query.value("last_obs").toInt());
+            QString meas_seq = query.value("meas_seq").isNull() ? "NA" : QString::number(query.value("meas_seq").toInt());
 
+            // TODO Remove the device prefix...
             QVariantMap device;
             device["deviceName"] = name;
             device["deviceAddress"] = mac;
             device["deviceVoltage"] = voltage;
             device["deviceMovement"] = movement;
+            device["temperature"] = temperature;
+            device["humidity"] = humidity;
+            device["pressure"] = pressure;
+            device["tx"] = tx;
+            device["accX"] = acc_x;
+            device["accY"] = acc_y;
+            device["accZ"] = acc_z;
+            device["last_obs"] = last_obs;
+            device["meas_seq"] = meas_seq;
 
             devices.append(device);
         }

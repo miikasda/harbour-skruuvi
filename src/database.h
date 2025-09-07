@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023-2024  Miika Malin
+    Copyright (C) 2023-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -47,11 +47,16 @@ public:
 private:
     QSqlDatabase db;
     void checkAndAddColumn(const QString &tableName, const QString &columnName, const QString &columnType);
+    void updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX,
+        double accY, double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
 
 signals:
     void inputFinished();
     void voltageUpdated(const QString &mac, double voltage);
     void movementUpdated(const QString &mac, int movement);
+    void deviceDataUpdated(
+        const QString &mac, double temperature, double humidity, double pressure, double accX, double accY,
+        double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
 };
 
 #endif // DATABASE_H
