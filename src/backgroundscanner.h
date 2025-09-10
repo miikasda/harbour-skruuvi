@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2024  Miika Malin
+    Copyright (C) 2024-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -29,7 +29,7 @@ public:
     explicit backgroundscanner(QObject *parent = nullptr, database* db = nullptr);
     Q_INVOKABLE void startScan();
     Q_INVOKABLE void stopScan();
-
+    Q_INVOKABLE bool isScanning() const;
 
 signals:
     void discoveryStopped();

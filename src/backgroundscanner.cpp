@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2024  Miika Malin
+    Copyright (C) 2024-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@ backgroundscanner::backgroundscanner(QObject *parent, database* db)
     , db(db)
     , scanning(false)
 {
+    startScan();
 }
 
 std::array<uint8_t, 24> backgroundscanner::parseManufacturerData(const QDBusArgument &dbusArg) {
@@ -75,6 +76,7 @@ void backgroundscanner::startScan()
             qDebug() << "Bluetooth is off";
             emit bluetoothOff();
             emit discoveryStopped();
+            scanning = false;
             return;
         }
     }
@@ -175,4 +177,8 @@ void backgroundscanner::onPropertiesChanged(const QString &interface, const QVar
         qDebug() << "Backgroundscanner: Got new ManufacturerData (onPropertiesChanged):";
         db->inputManufacturerData(manufacturerData);
     }
+}
+
+bool backgroundscanner::isScanning() const {
+    return scanning;
 }

@@ -33,17 +33,22 @@ Page {
         anchors.fill: parent
 
         PullDownMenu {
+            id: topmenu
             MenuItem {
-                text: "Scan"
+                property string menuText: bs.isScanning() ? "Stop scanning" : "Start scanning"
+                text: menuText
                 onClicked: {
-                    clearBluetoothIcons();
-                    busyIndicator.visible = true;
-                    busyIndicator.running = true;
-                    btOffLabel.visible = false;
-                    ld.startDiscovery();
+                    if (bs.isScanning()) {
+                        bs.stopScan()
+                        clearBluetoothIcons()
+                    } else {
+                        btOffLabel.visible = false
+                        bs.startScan()
+                    }
+                    menuText = bs.isScanning() ? "Stop scanning" : "Start scanning"
                 }
             }
-         }
+        }
 
         PageHeader {
             id: pHeader
@@ -69,20 +74,16 @@ Page {
 
         Label {
             id: btOffLabel
-            text: "Bluetooth is off, please turn it on"
+            text: "Bluetooth is off, please turn it on and use the pull down menu to scan for Ruuvi devices"
+            width: parent.width - (leftMargin + rightMargin)
             height: visible ? contentHeight : 0
             font.pixelSize: Theme.fontSizeLarge
             color: Theme.highlightColor
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.top: skruuviLogo.bottom
             visible: false
-        }
-
-        BusyIndicator {
-             id: busyIndicator
-             size: BusyIndicatorSize.Medium
-             anchors.centerIn: deviceList
-             visible: false  // Initially hidden
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
         }
 
         SilicaListView {
@@ -133,7 +134,7 @@ Page {
 
             Label {
                 width: parent.width
-                text: "No known devices, use the pull down menu to scan for new Ruuvi devices"
+                text: "No known devices"
                 font.pixelSize: Theme.fontSizeLarge
                 color: Theme.highlightColor
                 //anchors.centerIn: parent
@@ -146,30 +147,6 @@ Page {
                     right: parent.right
                     rightMargin: rightMargin
                     verticalCenter: parent.verticalCenter
-                }
-            }
-
-            // TODO: Initial buttons to test background scanning, later this will be toggled from settings page
-            Button {
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.leftMargin: leftMargin
-                text: "Start BS"
-                onClicked: {
-                    clearBluetoothIcons();
-                    busyIndicator.visible = true;
-                    busyIndicator.running = true;
-                    btOffLabel.visible = false;
-                    bs.startScan();
-                }
-            }
-            Button {
-                anchors.bottom: parent.bottom
-                anchors.right: parent.right
-                anchors.rightMargin: rightMargin
-                text: "Stop BS"
-                onClicked: {
-                    bs.stopScan();
                 }
             }
 
@@ -579,6 +556,7 @@ Page {
                     deviceModel.setProperty(i, "deviceMovement", movementCounter.toString());
                     deviceModel.setProperty(i, "meas_seq", measurementSequenceNumber.toString());
                     deviceModel.setProperty(i, "last_obs", timestamp.toString());
+                    deviceModel.setProperty(i, "showBluetoothIcon", true);
                     break;
                 }
             }
@@ -630,9 +608,6 @@ Page {
         target: bs
         onBluetoothOff: {
             btOffLabel.visible = true;
-        }
-        onDiscoveryStopped: {
-            busyIndicator.visible = false;
         }
     }
 }
