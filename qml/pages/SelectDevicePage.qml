@@ -408,8 +408,6 @@ Page {
                             var selectedDevice = {
                                 deviceName: model.deviceName,
                                 deviceAddress: model.deviceAddress,
-                                deviceVoltage: model.deviceVoltage,
-                                deviceMovement: model.deviceMovement
                             }
                             // On default show last 24h data
                             var currentTime = Math.floor(Date.now() / 1000);
