@@ -1,4 +1,3 @@
-
 import QtQuick 2.0
 import QtQml 2.1
 import Sailfish.Silica 1.0
@@ -254,7 +253,7 @@ Item {
                         drawPoints(ctx, points);
                         // Add latest value top of the graph
                         var lastValue = points[points.length-1].y;
-                        labelLastValue.text = root.createYLabel(lastValue)+root.axisY.units;
+                        labelLastValue.text = root.createYLabel(lastValue.toFixed(2))+root.axisY.units;
                     }
                 }
             }
