@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2024-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,16 +18,18 @@
 #include <QObject>
 #include <QDBusConnection>
 #include <QDBusObjectPath>
+#include <QDBusArgument>
+#include "database.h"
 
-class listdevices : public QObject
+class backgroundscanner : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit listdevices(QObject *parent = nullptr);
-    Q_INVOKABLE void startDiscovery();
-    Q_INVOKABLE void stopDiscovery();
-
+    explicit backgroundscanner(QObject *parent = nullptr, database* db = nullptr);
+    Q_INVOKABLE void startScan();
+    Q_INVOKABLE void stopScan();
+    Q_INVOKABLE bool isScanning() const;
 
 signals:
     void deviceFound(const QString deviceName, const QString deviceAddress);
@@ -36,8 +38,11 @@ signals:
 
 private slots:
     void onInterfacesAdded(const QDBusObjectPath &objectPath, const QVariantMap &interfaces);
+    void onPropertiesChanged(const QString &interface, const QVariantMap &changedProperties, const QStringList &);
+    std::array<uint8_t, 24> parseManufacturerData(const QDBusArgument &dbusArg);
 
 private:
     QDBusConnection bus;
-
+    database* db;
+    bool scanning;
 };

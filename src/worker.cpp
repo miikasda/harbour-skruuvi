@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2024  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,9 +28,7 @@ void worker::inputRawData() {
     constexpr int AIR_PRESSURE = 0x32;
 
     // Add the device into the database if it's not there yet
-    QString createDeviceQuery = "INSERT OR IGNORE INTO devices (mac, name) "
-                                "VALUES ('" + deviceAddress + "', '" + deviceName + "')";
-    db->executeQuery(createDeviceQuery);
+    db->addDevice(deviceAddress, deviceName);
 
     // Create lists for each sensor
     QList<QPair<int, double>> temperatureList;

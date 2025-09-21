@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023-2024  Miika Malin
+    Copyright (C) 2023-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -29,11 +29,28 @@ Page {
     property int pickedHour: -1
     property int pickedMinute: -1
     property int logStart: 0
+    property int syncStart: 0
 
     function constructUnixTimestamp(minute, hour, day, month, year) {
         var date = new Date(year, month - 1, day, hour, minute);
         var unixTimestamp = Math.floor(date.getTime() / 1000);
         return unixTimestamp;
+    }
+
+    function formatLastSyncLabel(timestamp) {
+        if (timestamp === 0) {
+            return "Last sync: Never";
+        }
+        var options = {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false
+        };
+        // Convert seconds to milliseconds for JavaScript Date
+        return "Last sync: " + new Date(timestamp * 1000).toLocaleString(undefined, options);
     }
 
     Connections {
@@ -105,6 +122,15 @@ Page {
                 text: selectedDevice.deviceAddress
                 font.pixelSize: Theme.fontSizeSmall
                 visible: !loadingScreen.running
+            }
+
+            Label {
+                id: lastSyncLabel
+                leftPadding: leftMargin
+                color: Theme.highlightColor
+                font.pixelSize: Theme.fontSizeSmall
+                visible: !loadingScreen.running
+                text: formatLastSyncLabel(db.getLastSync(selectedDevice.deviceAddress))
             }
 
             SectionHeader {
@@ -240,10 +266,11 @@ Page {
             loadingScreen.text = "Connecting to Ruuvi"
             loadingScreen.running = true
             if (fetchAllSwitch.checked) {
-                logStart =  db.getLastMeasurement(selectedDevice.deviceAddress, dataSelection.value)
+                logStart = db.getLastSync(selectedDevice.deviceAddress);
             } else {
                 logStart = constructUnixTimestamp(pickedMinute, pickedHour, dateChosen.day, dateChosen.month, dateChosen.year)
             }
+            syncStart = Math.floor(Date.now() / 1000);
             call('ruuvi_read.ruuvi_tag_reader.get_logs', [selectedDevice.deviceAddress, logStart, dataSelection.value], function() {});
         }
 
@@ -261,16 +288,13 @@ Page {
                 loadingScreen.text = "Data fetched, appending to database"
                 // Call the C++ function with the values
                 db.inputRawData(selectedDevice.deviceAddress, selectedDevice.deviceName, data);
+                // Update the sync time to database and to the label
+                db.setLastSync(selectedDevice.deviceAddress, selectedDevice.deviceName, syncStart);
+                lastSyncLabel.text = formatLastSyncLabel(syncStart);
             } else if (data[0] === "connected") {
                 loadingScreen.text = "Connected, fetching data"
             } else if (data[0] === "data_received_amount") {
                 loadingScreen.text = "Connected, received " + data[1] + " readings"
-            } else if (data[0] === "extra_data") {
-                // Update voltage and movement counter
-                db.setVoltage(selectedDevice.deviceAddress, data[1])
-                selectedDevice.deviceVoltage = data[1]
-                db.setMovement(selectedDevice.deviceAddress, data[2])
-                selectedDevice.deviceMovement = data[2]
             } else if (data[0] === "failed") {
                 loadingScreen.running = false;
                 failureOverlay.visible = true;

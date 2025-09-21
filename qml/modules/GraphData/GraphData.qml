@@ -1,3 +1,4 @@
+
 import QtQuick 2.0
 import QtQml 2.1
 import Sailfish.Silica 1.0
@@ -36,7 +37,7 @@ Item {
     property bool valueTotal: false
 
     property int graphHeight: 250
-    property int graphWidth: canvas.width / canvas.stepX
+    property int graphWidth: canvas.width
     property bool doubleAxisXLables: false
 
     property bool scale: false
@@ -59,26 +60,26 @@ Item {
         if (!data) return;
 
         var pointMaxY = Number.NEGATIVE_INFINITY;
-        var pointMinY = Number.POSITIVE_INFINITY
+        var pointMinY = Number.POSITIVE_INFINITY;
         if (data.length > 0) {
             minX = data[0].x;
             maxX = data[data.length-1].x;
         }
         data.forEach(function(point) {
             if (point.y > pointMaxY) {
-                pointMaxY = point.y
+                pointMaxY = point.y;
             }
             if (point.y < pointMinY) {
-                pointMinY = point.y
+                pointMinY = point.y;
             }
         });
         points = data;
         if (scale) {
-            // Set the y-axis limits no nearest integer
+            // Set the y-axis limits to the nearest integer
             maxY = Math.ceil(pointMaxY);
-            minY = Math.floor(pointMinY)
+            minY = Math.floor(pointMinY);
         }
-        doubleAxisXLables = ((maxX - minX) > 129600); // 1,5 days
+        doubleAxisXLables = ((maxX - minX) > 129600); // 1.5 days
 
         canvas.requestPaint();
     }
@@ -92,7 +93,7 @@ Item {
     }
 
     function createXLabel(value) {
-        var d = new Date(value*1000);
+        var d = new Date(value * 1000);
         return Qt.formatTime(d, axisX.mask);
     }
 
@@ -100,7 +101,7 @@ Item {
         anchors {
             top: parent.top
             left: parent.left
-            leftMargin: 3*Theme.paddingLarge
+            leftMargin: 3 * Theme.paddingLarge
             right: parent.right
             rightMargin: Theme.paddingLarge
         }
@@ -138,6 +139,26 @@ Item {
                 }
             }
 
+            Label {
+                text: "No data"
+                anchors.centerIn: parent
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeLarge
+                visible: noData
+            }
+
+            Label {
+                text: axisY.units
+                anchors {
+                    left: parent.left
+                    top: parent.top
+                    leftMargin: Theme.paddingSmall
+                }
+                color: Theme.primaryColor
+                font.pixelSize: Theme.fontSizeSmall
+                visible: !noData
+            }
+
             Repeater {
                 model: noData ? 0 : (axisY.grid + 1)
                 delegate: Label {
@@ -159,7 +180,7 @@ Item {
                 delegate: Label {
                     color: Theme.primaryColor
                     font.pixelSize: Theme.fontSizeLarge / 2
-                    text: createXLabel( (maxX-minX)/axisX.grid * index + minX )
+                    text: createXLabel(minX + index * ((maxX - minX) / axisX.grid))
                     anchors {
                         top: parent.bottom
                         topMargin: Theme.paddingSmall
@@ -167,6 +188,7 @@ Item {
                         right: (index == axisX.grid) ? parent.right : undefined
                         leftMargin: (index) ? (parent.width / axisX.grid * index - width/2): 0
                     }
+                    x: index * (parent.width / axisX.grid) - width / 2 // Adjust for center alignment
                     Label {
                         color: Theme.primaryColor
                         font.pixelSize: Theme.fontSizeLarge / 2
@@ -180,104 +202,61 @@ Item {
                 }
             }
 
-            Label {
-                color: Theme.primaryColor
-                font.pixelSize: Theme.fontSizeLarge / 2
-                text: axisY.units
-                anchors {
-                    top: parent.top
-                    left: parent.left
-                    leftMargin: Theme.paddingSmall
-                }
-                visible: !noData
-            }
-
             Canvas {
                 id: canvas
                 anchors {
                     fill: parent
-                    //leftMargin: Theme.paddingSmall
-                    //rightMargin: Theme.paddingSmall
                 }
-
-                //renderTarget: Canvas.FramebufferObject
-                //renderStrategy: Canvas.Threaded
-
-                property real stepX: parent.width / (points.length - 1)
-                property real stepY: (maxY-minY)/(height-2)
 
                 function drawGrid(ctx) {
                     ctx.save();
-
                     ctx.lineWidth = 1;
                     ctx.strokeStyle = lineColor;
                     ctx.globalAlpha = 0.4;
-                    //i=0 and i=axisY.grid skipped, top/bottom line
-                    for (var i=1;i<axisY.grid;i++) {
+
+                    for (var i = 1; i < axisY.grid; i++) {
                         ctx.beginPath();
-                        ctx.moveTo(0, height/axisY.grid * i);
-                        ctx.lineTo(width, height/axisY.grid * i);
+                        ctx.moveTo(0, height / axisY.grid * i);
+                        ctx.lineTo(width, height / axisY.grid * i);
                         ctx.stroke();
                     }
-
                     ctx.restore();
                 }
 
-                //TODO: allow multiple lines to be drawn
                 function drawPoints(ctx, points) {
+                    if (points.length === 0) return;
+                    ctx.save();
+                    ctx.strokeStyle = lineColor;
+                    ctx.lineWidth = lineWidth;
+                    ctx.beginPath();
+
+                    var xFactor = width / (maxX - minX);
+                    for (var i = 0; i < points.length; i++) {
+                        var x = (points[i].x - minX) * xFactor;
+                        var y = height - ((points[i].y - minY) / (maxY - minY)) * height;
+                        if (i === 0) {
+                            ctx.moveTo(x, y);
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+                    }
+                    ctx.stroke();
+                    ctx.restore();
                 }
 
                 onPaint: {
                     var ctx = canvas.getContext("2d");
                     ctx.globalCompositeOperation = "source-over";
-                    ctx.clearRect(0,0,width,height);
+                    ctx.clearRect(0, 0, width, height);
 
-                    //console.log("maxY", maxY, "minY", minY, "height", height, "StepY", stepY);
-
-                    var end = points.length;
-
-                    if (end > 0) {
+                    if (points.length > 0) {
                         drawGrid(ctx);
-                    }
-
-                    ctx.save()
-                    ctx.strokeStyle = lineColor;
-                    //ctx.globalAlpha = 0.8;
-                    ctx.lineWidth = lineWidth;
-                    ctx.beginPath();
-                    var x = 0;
-                    var valueSum = 0;
-                    for (var i = 0; i < end; i++) {
-                        valueSum += points[i].y;
-                        var y = height - Math.floor((points[i].y - minY) / stepY) - 1;
-                        if (i == 0) {
-                            ctx.moveTo(x, y);
-                        } else {
-                            ctx.lineTo(x, y);
-                        }
-                        x+=stepX; //point[i].x can be used for grid title
-                    }
-                    ctx.stroke();
-                    ctx.restore();
-
-                    if (end > 0) {
-                        var lastValue = valueSum;
-                        if (!root.valueTotal) {
-                            lastValue = points[end-1].y;
-                        }
-                        if (lastValue) {
-                            labelLastValue.text = root.createYLabel(lastValue)+root.axisY.units;
-                        }
+                        drawPoints(ctx, points);
+                        // Add latest value top of the graph
+                        var lastValue = points[points.length-1].y;
+                        labelLastValue.text = root.createYLabel(lastValue)+root.axisY.units;
                     }
                 }
-            }
-
-            Text {
-                id: textNoData
-                anchors.centerIn: parent
-                color: lineColor
-                text: qsTr("No data");
-                visible: noData
             }
         }
     }
