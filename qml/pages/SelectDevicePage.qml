@@ -508,33 +508,6 @@ Page {
 
     Connections {
         target: db
-        onVoltageUpdated: {
-            // Find the device with the matching mac address in the model
-            var deviceFound = false;
-            for (var i = 0; i < deviceModel.count; i++) {
-                var device = deviceModel.get(i);
-                if (device.deviceAddress === mac) {
-                    deviceFound = true;
-                    // Update the voltage for the matched device
-                    deviceModel.setProperty(i, "deviceVoltage", voltage.toString());
-                    console.log("Voltage updated for " + mac);
-                    break;
-                }
-            }
-        }
-        onMovementUpdated: {
-            var deviceFound = false;
-            for (var i = 0; i < deviceModel.count; i++) {
-                var device = deviceModel.get(i);
-                if (device.deviceAddress === mac) {
-                    deviceFound = true;
-                    // Update the movement for the matched device
-                    deviceModel.setProperty(i, "deviceMovement", movement.toString());
-                    console.log("Movement updated for " + mac);
-                    break;
-                }
-            }
-        }
         onDeviceDataUpdated: {
             console.log("Device data updated for " + mac);
             for (var i = 0; i < deviceModel.count; i++) {

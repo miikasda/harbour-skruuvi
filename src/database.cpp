@@ -162,32 +162,6 @@ void database::updateDevice(const QString &mac, double temperature, double humid
     }
 }
 
-void database::setVoltage(const QString &mac, double voltage) {
-    QSqlQuery query(db);
-    query.prepare("UPDATE devices SET voltage = :voltage WHERE mac = :mac");
-    query.bindValue(":voltage", voltage);
-    query.bindValue(":mac", mac);
-
-    if (!query.exec()) {
-        qDebug() << "Error setting voltage:" << query.lastError().text();
-    } else {
-        emit voltageUpdated(mac, voltage); // Emit the new voltage reading
-    }
-}
-
-void database::setMovement(const QString &mac, int movement) {
-    QSqlQuery query(db);
-    query.prepare("UPDATE devices SET movement = :movement WHERE mac = :mac");
-    query.bindValue(":movement", movement);
-    query.bindValue(":mac", mac);
-
-    if (!query.exec()) {
-        qDebug() << "Error setting movement:" << query.lastError().text();
-    } else {
-        emit movementUpdated(mac, movement); // Emit the new movement reading
-    }
-}
-
 void database::setLastSync(const QString& deviceAddress, const QString& deviceName, int timestamp) {
     addDevice(deviceAddress, deviceName);
     QString updateQuery = "UPDATE devices SET sync_time = " + QString::number(timestamp) +

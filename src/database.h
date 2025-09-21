@@ -40,8 +40,6 @@ public:
     Q_INVOKABLE void renameDevice(const QString deviceAddress, const QString newDeviceName);
     Q_INVOKABLE void removeDevice(const QString deviceAddress);
     Q_INVOKABLE QString exportCSV(const QString deviceAddress, const QString deviceName, int startTime, int endTime);
-    Q_INVOKABLE void setVoltage(const QString &mac, double voltage);
-    Q_INVOKABLE void setMovement(const QString &mac, int movement);
     Q_INVOKABLE void setLastSync(const QString& deviceAddress, const QString& deviceName, int timestamp);
 
 private:
@@ -52,8 +50,6 @@ private:
 
 signals:
     void inputFinished();
-    void voltageUpdated(const QString &mac, double voltage);
-    void movementUpdated(const QString &mac, int movement);
     void deviceDataUpdated(
         const QString &mac, double temperature, double humidity, double pressure, double accX, double accY,
         double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
