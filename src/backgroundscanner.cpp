@@ -136,6 +136,8 @@ void backgroundscanner::onInterfacesAdded(const QDBusObjectPath &objectPath, con
 
         // Only continue processing if name contains "Ruuvi"
         if (deviceName.contains("Ruuvi")) {
+            // Emit devicefound signal to be able to handle new devices in QML
+            emit deviceFound(deviceName, deviceAddress);
             // Parse BT advertisement data from ManufacturerData field
             // We need to read the ManufacturerData through org.freedesktop.DBus.Properties,
             // otherwise we will crash if read the property with deviceInterface.property, see

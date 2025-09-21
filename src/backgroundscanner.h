@@ -32,6 +32,7 @@ public:
     Q_INVOKABLE bool isScanning() const;
 
 signals:
+    void deviceFound(const QString deviceName, const QString deviceAddress);
     void discoveryStopped();
     void bluetoothOff();
 

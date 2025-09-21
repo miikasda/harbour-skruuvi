@@ -564,7 +564,10 @@ Page {
     }
 
     Connections {
-        target: ld
+        target: bs
+        onBluetoothOff: {
+            btOffLabel.visible = true;
+        }
         onDeviceFound: {
             // Check if a device with the same address already exists in the model
             var existingDeviceIndex = -1;
@@ -595,19 +598,6 @@ Page {
                     showBluetoothIcon: true
                 });
             }
-        }
-        onDiscoveryStopped: {
-            busyIndicator.visible = false;
-        }
-        onBluetoothOff: {
-            btOffLabel.visible = true;
-        }
-    }
-
-    Connections {
-        target: bs
-        onBluetoothOff: {
-            btOffLabel.visible = true;
         }
     }
 }

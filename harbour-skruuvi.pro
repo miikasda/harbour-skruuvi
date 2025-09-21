@@ -18,13 +18,11 @@ QT += dbus sql
 
 HEADERS += \
     src/database.h \
-    src/listdevices.h \
     src/worker.h \
     src/backgroundscanner.h
 
 SOURCES += src/harbour-skruuvi.cpp \
     src/database.cpp \
-    src/listdevices.cpp \
     src/worker.cpp \
     src/backgroundscanner.cpp
 
