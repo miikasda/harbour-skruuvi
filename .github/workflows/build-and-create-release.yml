@@ -3,7 +3,7 @@ name: Build RPMs and create release if version has changed
 
 env:
   # Check latest version from https://github.com/CODeRUS/docker-sailfishos-platform-sdk
-  sfos_version: 4.5.0.16
+  sfos_version: 5.0.0.43
 
 on:
   pull_request:

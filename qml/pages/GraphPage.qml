@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -37,9 +37,6 @@ Page {
     }
 
     Component.onCompleted: {
-        console.log("data: ", par_data)
-        console.log("title: ", par_title)
-        console.log("units: ", par_units)
         graph.setPoints(par_data);
     }
 
