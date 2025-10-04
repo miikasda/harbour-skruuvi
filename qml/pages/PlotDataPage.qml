@@ -29,7 +29,9 @@ Page {
     property var selectedDevice: pageStack.pop().selectedDevice
     property int leftMargin: Theme.horizontalPageMargin
     property int rightMargin: Theme.horizontalPageMargin
-
+    property var maxPoints: 0
+    property bool aggregated: false
+    property real bucketDuration: 0
     // Use global data so we can redraw it
     property var tempData: []
     property var humidityData: []
@@ -40,6 +42,122 @@ Page {
         date.setHours(hour, minute, 0, 0);
         var unixTimestamp = Math.floor(date.getTime() / 1000);
         return unixTimestamp;
+    }
+
+    function formatBinSize(seconds) {
+        if (seconds < 60)
+            return Math.round(seconds) + " s";
+        else if (seconds < 3600)
+            return Math.round(seconds / 60) + " min";
+        else if (seconds < 86400)
+            return Math.round(seconds / 3600) + " h";
+        else
+            return Math.round(seconds / 86400) + " d";
+    }
+
+    function downsampleMinMax(points, maxPoints) {
+        if (!points || points.length === 0) {
+            // If no data, return empty
+            plotDataPage.aggregated = false
+            plotDataPage.bucketDuration = 0
+            return [];
+        }
+
+        if (points.length <= 2 * maxPoints) {
+            // No need to downsample
+            // 2 x maxpoints = every bucket would have min and max value
+            plotDataPage.aggregated = false
+            plotDataPage.bucketDuration = 0
+            return points;
+        }
+
+        // Determine total time range
+        var minX = points[0].x;
+        var maxX = points[points.length - 1].x;
+        var range = maxX - minX;
+        if (range <= 0) {
+            // No meaningful time span, return original
+            plotDataPage.aggregated = false
+            plotDataPage.bucketDuration = 0
+            return points;
+        }
+
+        // Each bucket spans this many seconds
+        var bucketDuration = range / maxPoints;
+        plotDataPage.bucketDuration = bucketDuration;
+
+        var sampled = [];
+        var bucketStart = minX;
+        var bucketEnd = bucketStart + bucketDuration;
+        var bucket = [];
+
+        for (var i = 0; i < points.length; i++) {
+            var p = points[i];
+
+            // If point belongs to current bucket
+            if (p.x <= bucketEnd) {
+                bucket.push(p);
+            } else {
+                // Process the finished bucket
+                if (bucket.length > 0) {
+                    var minPoint = bucket[0];
+                    var maxPoint = bucket[0];
+
+                    // Find min and max for this bucket
+                    for (var j = 1; j < bucket.length; j++) {
+                        if (bucket[j].y < minPoint.y) minPoint = bucket[j];
+                        if (bucket[j].y > maxPoint.y) maxPoint = bucket[j];
+                    }
+
+                    // Add in chronological order the min and max
+                    if (minPoint === maxPoint) {
+                        sampled.push(minPoint);
+                    } else if (minPoint.x < maxPoint.x) {
+                        sampled.push(minPoint);
+                        sampled.push(maxPoint);
+                    } else {
+                        sampled.push(maxPoint);
+                        sampled.push(minPoint);
+                    }
+                }
+
+                // Start a new bucket
+                bucket = [p];
+                bucketStart = bucketEnd;
+                bucketEnd = bucketStart + bucketDuration;
+            }
+        }
+
+        // Process last bucket
+        if (bucket.length > 0) {
+            var minPoint = bucket[0];
+            var maxPoint = bucket[0];
+            for (var j = 1; j < bucket.length; j++) {
+                if (bucket[j].y < minPoint.y) minPoint = bucket[j];
+                if (bucket[j].y > maxPoint.y) maxPoint = bucket[j];
+            }
+            if (minPoint === maxPoint) {
+                sampled.push(minPoint);
+            } else if (minPoint.x < maxPoint.x) {
+                sampled.push(minPoint);
+                sampled.push(maxPoint);
+            } else {
+                sampled.push(maxPoint);
+                sampled.push(minPoint);
+            }
+        }
+
+        // DEBUG: log downsampling result
+        var reduced = points.length - sampled.length;
+        console.log(
+            "Downsampled " + points.length + " → " + sampled.length +
+            " points (reduced by " + reduced + ")" +
+            " over " + formatBinSize(range) +
+            " (bucketDuration ≈ " + formatBinSize(bucketDuration) + ")"
+        );
+
+        plotDataPage.aggregated = true
+        return sampled;
     }
 
     allowedOrientations: Orientation.All
@@ -84,13 +202,14 @@ Page {
                         // No end time; fetch up to current time
                         endTime = Math.floor(Date.now() / 1000);
                     }
+                    maxPoints = tempGraph.width;
                     // Fetch and plot the data
                     tempData = db.getSensorData(selectedDevice.deviceAddress, "temperature", startTime, endTime);
-                    tempGraph.setPoints(tempData);
+                    tempGraph.setPoints(downsampleMinMax(tempData, maxPoints));
                     humidityData = db.getSensorData(selectedDevice.deviceAddress, "humidity", startTime, endTime);
-                    humidityGraph.setPoints(humidityData);
+                    humidityGraph.setPoints(downsampleMinMax(humidityData, maxPoints));
                     pressureData = db.getSensorData(selectedDevice.deviceAddress, "air_pressure", startTime, endTime);
-                    pressureGraph.setPoints(pressureData);
+                    pressureGraph.setPoints(downsampleMinMax(pressureData, maxPoints));
                 }
             }
          }
@@ -130,6 +249,17 @@ Page {
                 id: dataPlotHeader
                 text: "Data plots"
             }
+
+            Label {
+            visible: aggregated
+            leftPadding: leftMargin
+            rightPadding: rightMargin
+            wrapMode: Text.Wrap
+            text: qsTr("Data is aggregated (bin ≈ %1).\nTap a graph to view full data")
+                    .arg(formatBinSize(bucketDuration))
+            color: Theme.secondaryHighlightColor
+            font.pixelSize: Theme.fontSizeSmall
+        }
 
             GraphData {
                 id: tempGraph
@@ -186,12 +316,13 @@ Page {
             }
 
             Component.onCompleted: {
+                maxPoints = tempGraph.width;
                 tempData = db.getSensorData(selectedDevice.deviceAddress, "temperature", startTime, endTime);
-                tempGraph.setPoints(tempData);
+                tempGraph.setPoints(downsampleMinMax(tempData, maxPoints));
                 humidityData = db.getSensorData(selectedDevice.deviceAddress, "humidity", startTime, endTime);
-                humidityGraph.setPoints(humidityData);
+                humidityGraph.setPoints(downsampleMinMax(humidityData, maxPoints));
                 pressureData = db.getSensorData(selectedDevice.deviceAddress, "air_pressure", startTime, endTime);
-                pressureGraph.setPoints(pressureData);
+                pressureGraph.setPoints(downsampleMinMax(pressureData, maxPoints));
             }
 
             SectionHeader {
@@ -275,9 +406,10 @@ Page {
             if (status === PageStatus.Active & visible) {
                 // Lines are not shown when app is background
                 // redraw the graphs when the page is visible again
-                tempGraph.setPoints(tempData);
-                humidityGraph.setPoints(humidityData);
-                pressureGraph.setPoints(pressureData);
+                maxPoints = tempGraph.width;
+                tempGraph.setPoints(downsampleMinMax(tempData, maxPoints));
+                humidityGraph.setPoints(downsampleMinMax(humidityData, maxPoints));
+                pressureGraph.setPoints(downsampleMinMax(pressureData, maxPoints));
             }
         }
     }
