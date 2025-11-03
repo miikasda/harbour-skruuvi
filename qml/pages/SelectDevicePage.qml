@@ -378,6 +378,7 @@ Page {
                                 text: model.deviceVoltage + " V"
                                 font.pixelSize: Theme.fontSizeSmall
                                 anchors.verticalCenter: parent.verticalCenter
+                                color: model.deviceVoltage < 2.5 ? "red" : Theme.primaryColor
                             }
 
                             Image {
