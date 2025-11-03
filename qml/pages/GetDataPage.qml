@@ -286,6 +286,22 @@ Page {
             // Check if the first keyword is "data" indicating returned readings
             if (data[0] === "data") {
                 loadingScreen.text = "Data fetched, appending to database"
+
+                // Parse minimum timestamp and set it as logStart
+                if (data && data.length > 1) {
+                    var minTs = data[1][3];
+                    for (var i = 2; i < data.length; i++) {
+                        var obs = data[i];
+                        if (obs && obs.length > 3 && obs[3] < minTs) {
+                            minTs = obs[3];
+                        }
+                    }
+                    logStart = minTs;
+                    console.log("Logs starts from", logStart);
+                } else {
+                    console.log("Could not parse the data:", JSON.stringify(data));
+                }
+
                 // Call the C++ function with the values
                 db.inputRawData(selectedDevice.deviceAddress, selectedDevice.deviceName, data);
                 // Update the sync time to database and to the label
