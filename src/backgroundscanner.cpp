@@ -45,9 +45,9 @@ std::array<uint8_t, 24> backgroundscanner::parseManufacturerData(const QDBusArgu
         QByteArray value = valueVariant.variant().toByteArray();
         dbusArg.endMapEntry();
 
-        // Check if the length is exactly 24 bytes
-        if (value.size() != 24) {
-            qWarning() << "ManufacturerData length is" << value.size() << "bytes, expected 24 bytes.";
+        // Accept either DF5 (24 bytes) or DF6 (20 bytes)
+        if (value.size() != 24 && value.size() != 20) {
+            qWarning() << "ManufacturerData length is" << value.size() << "bytes, expected 20 or 24 bytes";
             return {};  // Return zero-filled array to indicate failure
         }
 
@@ -60,6 +60,17 @@ std::array<uint8_t, 24> backgroundscanner::parseManufacturerData(const QDBusArgu
     dbusArg.endMap();
 
     return manufacturerData;
+}
+
+QString backgroundscanner::macFromObjectPath(const QString &path)
+{
+    // Expected format: "/org/bluez/hci0/dev_XX_XX_XX_XX_XX_XX"
+    QString base = path.section('/', -1); // get last segment "dev_xx_xx..."
+    if (!base.startsWith("dev_"))
+        return {};
+    base = base.mid(4); // Remove "dev_"
+    base.replace('_', ':');
+    return base.toUpper();
 }
 
 void backgroundscanner::startScan()
@@ -152,16 +163,16 @@ void backgroundscanner::onInterfacesAdded(const QDBusObjectPath &objectPath, con
             std::array<uint8_t, 24> manufacturerData = parseManufacturerData(dbusArgs);
             qDebug() << "Backgroundscanner: Got new ManufacturerData (onInterfacesAdded):";
             db->addDevice(deviceAddress, deviceName);
-            db->inputManufacturerData(manufacturerData);
+            db->inputManufacturerData(deviceAddress, manufacturerData);
 
             // Connect to PropertiesChanged for this specific device so we get the manufacturerData updates
             bus.connect("org.bluez", objectPath.path(), "org.freedesktop.DBus.Properties",
-                        "PropertiesChanged", this, SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
+                        "PropertiesChanged", this, SLOT(onPropertiesChanged(QString, QVariantMap, QStringList, QDBusMessage)));
         }
     }
 }
 
-void backgroundscanner::onPropertiesChanged(const QString &interface, const QVariantMap &changedProperties, const QStringList &) {
+void backgroundscanner::onPropertiesChanged(const QString &interface, const QVariantMap &changedProperties, const QStringList &, const QDBusMessage &msg) {
     if (!scanning) {
         qDebug() << "Received PropertiesChanged signal, but background scanner is not active.";
         return;  // Ignore signals if not scanning
@@ -177,7 +188,9 @@ void backgroundscanner::onPropertiesChanged(const QString &interface, const QVar
         const QDBusArgument &dbusArg = manufacturerDataVar.value<QDBusArgument>();
         std::array<uint8_t, 24> manufacturerData = parseManufacturerData(dbusArg);
         qDebug() << "Backgroundscanner: Got new ManufacturerData (onPropertiesChanged):";
-        db->inputManufacturerData(manufacturerData);
+        const QString objectPath = msg.path();
+        QString deviceAddress = macFromObjectPath(objectPath);
+        db->inputManufacturerData(deviceAddress, manufacturerData);
     }
 }
 

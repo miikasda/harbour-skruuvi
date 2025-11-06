@@ -38,8 +38,9 @@ signals:
 
 private slots:
     void onInterfacesAdded(const QDBusObjectPath &objectPath, const QVariantMap &interfaces);
-    void onPropertiesChanged(const QString &interface, const QVariantMap &changedProperties, const QStringList &);
+    void onPropertiesChanged(const QString &interface, const QVariantMap &changedProperties, const QStringList &invalidated, const QDBusMessage &msg);
     std::array<uint8_t, 24> parseManufacturerData(const QDBusArgument &dbusArg);
+    QString macFromObjectPath(const QString &path);
 
 private:
     QDBusConnection bus;

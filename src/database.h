@@ -30,7 +30,7 @@ public:
     explicit database(QObject* parent = nullptr);
     void addDevice(const QString &deviceAddress, const QString &deviceName);
     Q_INVOKABLE void inputRawData(QString deviceAddress, QString deviceName, const QVariantList& data);
-    void inputManufacturerData(const std::array<uint8_t, 24> &manufacturerData);
+    void inputManufacturerData(const QString &deviceAddress, const std::array<uint8_t,24> &manufacturerData);
     Q_INVOKABLE QVariantList getSensorData(QString deviceAddress, QString sensor, int startTime, int endTime);
     void executeQuery(const QString& queryStr);
     void insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData);

@@ -183,51 +183,99 @@ void database::inputRawData(QString deviceAddress, QString deviceName, const QVa
     thread->start();
 }
 
-void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturerData) {
-    // Documentation for data parsing is at https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2
-
-    // Parse data
+void database::inputManufacturerData(const QString &deviceAddress, const std::array<uint8_t, 24> &manufacturerData) {
     int dataFormat = manufacturerData[0];
-    if (dataFormat != 5) {
-        qDebug() << "Unknown data format: " << dataFormat;
-        return;
-    }
-    int16_t temperatureData = (manufacturerData[1] << 8) | manufacturerData[2];
-    float temperature = static_cast<float>(temperatureData) * 0.005;
-    uint16_t humidityData = (manufacturerData[3] << 8) | manufacturerData[4];
-    float humidity = static_cast<float>(humidityData) * 0.0025;
-    uint16_t pressureData = (manufacturerData[5] << 8) | manufacturerData[6];
-    float pressure = (static_cast<int>(pressureData) + 50000) / 100.0;
-    int16_t accDataX = (manufacturerData[7] << 8) | manufacturerData[8];
-    float accX = static_cast<float>(accDataX) / 1000;
-    int16_t accDataY = (manufacturerData[9] << 8) | manufacturerData[10];
-    float accY = static_cast<float>(accDataY) / 1000;
-    int16_t accDataZ = (manufacturerData[11] << 8) | manufacturerData[12];
-    float accZ = static_cast<float>(accDataZ) / 1000;
-    uint16_t BatteryAndTxData = (manufacturerData[13] << 8) | manufacturerData[14];
-    int txPower = ((BatteryAndTxData & 0x1F) * 2) - 40;
-    float battery = (static_cast<float>(BatteryAndTxData >> 5) / 1000) + 1.6;
-    int movementCounter = manufacturerData[15];
-    int measurementSequenceNumber = (manufacturerData[16] << 8) | manufacturerData[17];
-    char macAddress[18];
-    sprintf(macAddress, "%02X:%02X:%02X:%02X:%02X:%02X",
-            manufacturerData[18], manufacturerData[19], manufacturerData[20], manufacturerData[21], manufacturerData[22], manufacturerData[23]);
-
-    // Update the device database with updateDevice
     int timestamp = QDateTime::currentDateTime().toTime_t();
-    updateDevice(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
- 
-    // Send to database
-    insertSensorData(macAddress, "temperature", {qMakePair(timestamp, temperature)});
-    if (humidityData != 0xFFFF) {
-        insertSensorData(macAddress, "humidity", {qMakePair(timestamp, humidity)});
-    }
-    if (pressureData != 0xFFFF) {
-        insertSensorData(macAddress, "air_pressure", {qMakePair(timestamp, pressure)});
-    }
+    if (dataFormat == 5) {
+        // Documentation for DF5 is at https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2
+        int16_t temperatureData = (manufacturerData[1] << 8) | manufacturerData[2];
+        float temperature = static_cast<float>(temperatureData) * 0.005;
+        uint16_t humidityData = (manufacturerData[3] << 8) | manufacturerData[4];
+        float humidity = static_cast<float>(humidityData) * 0.0025;
+        uint16_t pressureData = (manufacturerData[5] << 8) | manufacturerData[6];
+        float pressure = (static_cast<int>(pressureData) + 50000) / 100.0;
+        int16_t accDataX = (manufacturerData[7] << 8) | manufacturerData[8];
+        float accX = static_cast<float>(accDataX) / 1000;
+        int16_t accDataY = (manufacturerData[9] << 8) | manufacturerData[10];
+        float accY = static_cast<float>(accDataY) / 1000;
+        int16_t accDataZ = (manufacturerData[11] << 8) | manufacturerData[12];
+        float accZ = static_cast<float>(accDataZ) / 1000;
+        uint16_t BatteryAndTxData = (manufacturerData[13] << 8) | manufacturerData[14];
+        int txPower = ((BatteryAndTxData & 0x1F) * 2) - 40;
+        float battery = (static_cast<float>(BatteryAndTxData >> 5) / 1000) + 1.6;
+        int movementCounter = manufacturerData[15];
+        int measurementSequenceNumber = (manufacturerData[16] << 8) | manufacturerData[17];
+        char macAddress[18];
+        sprintf(macAddress, "%02X:%02X:%02X:%02X:%02X:%02X",
+                manufacturerData[18], manufacturerData[19], manufacturerData[20], manufacturerData[21], manufacturerData[22], manufacturerData[23]);
 
-    // Emit signal with new readings
-    emit deviceDataUpdated(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
+        // Update the device database with updateDevice
+        updateDevice(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
+
+        // Send to database
+        insertSensorData(macAddress, "temperature", {qMakePair(timestamp, temperature)});
+        if (humidityData != 0xFFFF) {
+            insertSensorData(macAddress, "humidity", {qMakePair(timestamp, humidity)});
+        }
+        if (pressureData != 0xFFFF) {
+            insertSensorData(macAddress, "air_pressure", {qMakePair(timestamp, pressure)});
+        }
+
+        // Emit signal with new readings
+        emit deviceDataUpdated(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
+    }
+    else if (dataFormat == 6) {
+        // Documentation for DF6 is at https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-6
+        qDebug() << "[DF6] From" << deviceAddress;
+        qDebug() << "Raw (first 20 bytes):"
+         << QByteArray(reinterpret_cast<const char*>(manufacturerData.data()), 20).toHex();
+
+        // Parse values according to DF6 specification
+        int16_t tRaw  = (manufacturerData[1] << 8) | manufacturerData[2];
+        uint16_t hRaw  = (manufacturerData[3] << 8) | manufacturerData[4];
+        uint16_t pRaw  = (manufacturerData[5] << 8) | manufacturerData[6];
+        uint16_t pmRaw = (manufacturerData[7] << 8) | manufacturerData[8];
+        uint16_t co2Raw = (manufacturerData[9] << 8) | manufacturerData[10];
+        uint8_t vocHi  = manufacturerData[11];
+        uint8_t noxHi  = manufacturerData[12];
+        uint8_t luxCode = manufacturerData[13];
+        uint8_t sequence = manufacturerData[15];
+        uint8_t flags = manufacturerData[16];
+
+        float temperature = tRaw * 0.005f;
+        float humidity    = hRaw * 0.0025f;
+        float pressure    = (pRaw + 50000) / 100.0f;    // hPa
+        float pm25        = pmRaw / 10.0f;              // µg/m³
+        float co2         = co2Raw;                     // ppm
+        int voc = (vocHi << 1) | ((flags >> 6) & 1);
+        int nox = (noxHi << 1) | ((flags >> 7) & 1);
+        bool calibrationInProgress = (flags & 0x01);
+
+        double lux;
+        if (luxCode == 0xFF) {
+            lux = std::numeric_limits<double>::quiet_NaN();
+        } else {
+            const double delta = std::log(65536.0) / 254.0;
+            lux = std::exp(luxCode * delta) - 1.0;
+        }
+
+        // Print everything – no database writes yet
+        qDebug() << "  Temperature:" << temperature << "°C";
+        qDebug() << "  Humidity:"    << humidity    << "%";
+        qDebug() << "  Pressure:"    << pressure    << "hPa";
+        qDebug() << "  PM2.5:"       << pm25        << "µg/m³";
+        qDebug() << "  CO₂:"         << co2         << "ppm";
+        qDebug() << "  VOC index:"   << voc;
+        qDebug() << "  NOx index:"   << nox;
+        qDebug() << "  Luminosity:"  << (std::isnan(lux) ? QStringLiteral("NA") : QString::number(lux, 'f', 2));
+        qDebug() << "  Sequence:"    << sequence;
+        qDebug() << "  Calibration in progress:"
+                << (calibrationInProgress ? "1 → calibration in progress" : "0 → calibration complete");
+
+    }
+    else {
+        qDebug() << "Unknown data format:" << dataFormat;
+    }
 }
 
 void database::insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData) {
