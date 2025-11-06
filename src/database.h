@@ -45,8 +45,10 @@ public:
 private:
     QSqlDatabase db;
     void checkAndAddColumn(const QString &tableName, const QString &columnName, const QString &columnType);
-    void updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX,
-        double accY, double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
+    void updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX, double accY,
+        double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
+    void updateRuuviAir(const QString &mac, double temperature, double humidity, double pressure,
+        double pm25, int co2, int voc, int nox, int calibrating, int sequence, int timestamp);
 
 signals:
     void inputFinished();

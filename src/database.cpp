@@ -76,6 +76,26 @@ database::database(QObject* parent) : QObject(parent) {
                                           "PRIMARY KEY (device, timestamp),"
                                           "FOREIGN KEY (device) REFERENCES devices(mac))";
     executeQuery(createAirPressureTableQuery);
+    executeQuery("CREATE TABLE IF NOT EXISTS pm25 ("
+                "device TEXT REFERENCES devices(mac),"
+                "timestamp INT,"
+                "value REAL,"
+                "PRIMARY KEY (device, timestamp))");
+    executeQuery("CREATE TABLE IF NOT EXISTS co2 ("
+                "device TEXT REFERENCES devices(mac),"
+                "timestamp INT,"
+                "value INT,"
+                "PRIMARY KEY (device, timestamp))");
+    executeQuery("CREATE TABLE IF NOT EXISTS voc ("
+                "device TEXT REFERENCES devices(mac),"
+                "timestamp INT,"
+                "value INT,"
+                "PRIMARY KEY (device, timestamp))");
+    executeQuery("CREATE TABLE IF NOT EXISTS nox ("
+                "device TEXT REFERENCES devices(mac),"
+                "timestamp INT,"
+                "value INT,"
+                "PRIMARY KEY (device, timestamp))");
 
     // Colums added after initial release needs to be appended
     checkAndAddColumn("devices", "voltage", "REAL");
@@ -90,6 +110,11 @@ database::database(QObject* parent) : QObject(parent) {
     checkAndAddColumn("devices", "acc_z", "REAL");
     checkAndAddColumn("devices", "last_obs", "int");
     checkAndAddColumn("devices", "meas_seq", "int");
+    checkAndAddColumn("devices", "pm25", "REAL");
+    checkAndAddColumn("devices", "co2", "INT");
+    checkAndAddColumn("devices", "voc", "INT");
+    checkAndAddColumn("devices", "nox", "INT");
+    checkAndAddColumn("devices", "calibrating", "INT");
 }
 
 void database::executeQuery(const QString& queryStr) {
@@ -123,8 +148,8 @@ void database::addDevice(const QString &deviceAddress, const QString &deviceName
     executeQuery(createDeviceQuery);
 }
 
-void database::updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX, 
-    double accY, double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp)
+void database::updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX, double accY,
+                            double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp)
 {
     QSqlQuery query(db);
     query.prepare(
@@ -160,6 +185,41 @@ void database::updateDevice(const QString &mac, double temperature, double humid
     if (!query.exec()) {
         qDebug() << "Error updating manufacturerdata to deviceDB:" << query.lastError().text();
     }
+}
+
+void database::updateRuuviAir(const QString &mac, double temperature, double humidity, double pressure, double pm25,
+                              int co2, int voc, int nox, int calibrating, int sequence, int timestamp)
+{
+    QSqlQuery query(db);
+    query.prepare(
+        "UPDATE devices SET "
+        "temperature = :temperature, "
+        "humidity = :humidity, "
+        "pressure = :pressure, "
+        "pm25 = :pm25, "
+        "co2 = :co2, "
+        "voc = :voc, "
+        "nox = :nox, "
+        "calibrating = :calibrating, "
+        "meas_seq = :sequence, "
+        "last_obs = :timestamp "
+        "WHERE mac = :mac"
+    );
+
+    query.bindValue(":temperature", temperature);
+    query.bindValue(":humidity", humidity);
+    query.bindValue(":pressure", pressure);
+    query.bindValue(":pm25", pm25);
+    query.bindValue(":co2", co2);
+    query.bindValue(":voc", voc);
+    query.bindValue(":nox", nox);
+    query.bindValue(":calibrating", calibrating);
+    query.bindValue(":sequence", sequence);
+    query.bindValue(":timestamp", timestamp);
+    query.bindValue(":mac", mac);
+
+    if (!query.exec())
+        qWarning() << "Error updating Ruuvi Air device data:" << query.lastError().text();
 }
 
 void database::setLastSync(const QString& deviceAddress, const QString& deviceName, int timestamp) {
@@ -246,7 +306,7 @@ void database::inputManufacturerData(const QString &deviceAddress, const std::ar
         float humidity    = hRaw * 0.0025f;
         float pressure    = (pRaw + 50000) / 100.0f;    // hPa
         float pm25        = pmRaw / 10.0f;              // µg/m³
-        float co2         = co2Raw;                     // ppm
+        int co2         = co2Raw;                     // ppm
         int voc = (vocHi << 1) | ((flags >> 6) & 1);
         int nox = (noxHi << 1) | ((flags >> 7) & 1);
         bool calibrationInProgress = (flags & 0x01);
@@ -259,7 +319,7 @@ void database::inputManufacturerData(const QString &deviceAddress, const std::ar
             lux = std::exp(luxCode * delta) - 1.0;
         }
 
-        // Print everything – no database writes yet
+        // Print everything
         qDebug() << "  Temperature:" << temperature << "°C";
         qDebug() << "  Humidity:"    << humidity    << "%";
         qDebug() << "  Pressure:"    << pressure    << "hPa";
@@ -272,6 +332,31 @@ void database::inputManufacturerData(const QString &deviceAddress, const std::ar
         qDebug() << "  Calibration in progress:"
                 << (calibrationInProgress ? "1 → calibration in progress" : "0 → calibration complete");
 
+        // Update device db
+        updateRuuviAir(deviceAddress, temperature, humidity, pressure, pm25, co2, voc, nox, calibrationInProgress, sequence, timestamp);
+
+        // Send to database
+        if (tRaw != 0x7FFF) {
+            insertSensorData(deviceAddress, "temperature", {{timestamp, temperature}});
+        }
+        if (hRaw != 0xFFFF) {
+            insertSensorData(deviceAddress, "humidity", {{timestamp, humidity}});
+        }
+        if (pRaw != 0xFFFF) {
+            insertSensorData(deviceAddress, "air_pressure", {{timestamp, pressure}});
+        }
+        if (pmRaw != 0xFFFF) {
+            insertSensorData(deviceAddress, "pm25", {{timestamp, pm25}});
+        }
+        if (co2Raw != 0xFFFF) {
+            insertSensorData(deviceAddress, "co2", {{timestamp, double(co2)}});
+        }
+        if (voc != 0x1FF) {
+            insertSensorData(deviceAddress, "voc", {{timestamp, double(voc)}});
+        }
+        if (nox != 0x1FF) {
+            insertSensorData(deviceAddress, "nox", {{timestamp, double(nox)}});
+        }
     }
     else {
         qDebug() << "Unknown data format:" << dataFormat;
