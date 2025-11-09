@@ -53,8 +53,10 @@ private:
 signals:
     void inputFinished();
     void deviceDataUpdated(
-        const QString &mac, double temperature, double humidity, double pressure, double accX, double accY,
-        double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
+        const QString &mac, double temperature, double humidity, double pressure, double accX, double accY, double accZ,
+        double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
+    void airDeviceDataUpdated(const QString &mac, double temperature, double humidity, double pressure, double pm25,
+                              int co2, int voc, int nox, int calibrating, int sequence, int timestamp);
 };
 
 #endif // DATABASE_H

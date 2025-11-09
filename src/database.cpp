@@ -298,10 +298,8 @@ void database::inputManufacturerData(const QString &deviceAddress, const std::ar
         uint16_t co2Raw = (manufacturerData[9] << 8) | manufacturerData[10];
         uint8_t vocHi  = manufacturerData[11];
         uint8_t noxHi  = manufacturerData[12];
-        uint8_t luxCode = manufacturerData[13];
         uint8_t sequence = manufacturerData[15];
         uint8_t flags = manufacturerData[16];
-
         float temperature = tRaw * 0.005f;
         float humidity    = hRaw * 0.0025f;
         float pressure    = (pRaw + 50000) / 100.0f;    // hPa
@@ -310,27 +308,6 @@ void database::inputManufacturerData(const QString &deviceAddress, const std::ar
         int voc = (vocHi << 1) | ((flags >> 6) & 1);
         int nox = (noxHi << 1) | ((flags >> 7) & 1);
         bool calibrationInProgress = (flags & 0x01);
-
-        double lux;
-        if (luxCode == 0xFF) {
-            lux = std::numeric_limits<double>::quiet_NaN();
-        } else {
-            const double delta = std::log(65536.0) / 254.0;
-            lux = std::exp(luxCode * delta) - 1.0;
-        }
-
-        // Print everything
-        qDebug() << "  Temperature:" << temperature << "°C";
-        qDebug() << "  Humidity:"    << humidity    << "%";
-        qDebug() << "  Pressure:"    << pressure    << "hPa";
-        qDebug() << "  PM2.5:"       << pm25        << "µg/m³";
-        qDebug() << "  CO₂:"         << co2         << "ppm";
-        qDebug() << "  VOC index:"   << voc;
-        qDebug() << "  NOx index:"   << nox;
-        qDebug() << "  Luminosity:"  << (std::isnan(lux) ? QStringLiteral("NA") : QString::number(lux, 'f', 2));
-        qDebug() << "  Sequence:"    << sequence;
-        qDebug() << "  Calibration in progress:"
-                << (calibrationInProgress ? "1 → calibration in progress" : "0 → calibration complete");
 
         // Update device db
         updateRuuviAir(deviceAddress, temperature, humidity, pressure, pm25, co2, voc, nox, calibrationInProgress, sequence, timestamp);
@@ -357,6 +334,9 @@ void database::inputManufacturerData(const QString &deviceAddress, const std::ar
         if (nox != 0x1FF) {
             insertSensorData(deviceAddress, "nox", {{timestamp, double(nox)}});
         }
+
+        // Emit signal with new readings
+        emit airDeviceDataUpdated(deviceAddress, temperature, humidity, pressure, pm25, co2, voc, nox, calibrationInProgress, sequence, timestamp);
     }
     else {
         qDebug() << "Unknown data format:" << dataFormat;
@@ -420,6 +400,11 @@ QVariantList database::getDevices()
             QString acc_z = query.value("acc_z").isNull() ? "NA" : QString::number(query.value("acc_z").toDouble());
             QString last_obs = query.value("last_obs").isNull() ? "NA" : QString::number(query.value("last_obs").toInt());
             QString meas_seq = query.value("meas_seq").isNull() ? "NA" : QString::number(query.value("meas_seq").toInt());
+            QString pm25 = query.value("pm25").isNull() ? "NA" : QString::number(query.value("pm25").toDouble());
+            QString co2 = query.value("co2").isNull() ? "NA" : QString::number(query.value("co2").toInt());
+            QString voc = query.value("voc").isNull() ? "NA" : QString::number(query.value("voc").toInt());
+            QString nox = query.value("nox").isNull() ? "NA" : QString::number(query.value("nox").toInt());
+            QString calibrating = query.value("calibrating").isNull() ? "NA" : QString::number(query.value("calibrating").toInt());
 
             // TODO Remove the device prefix...
             QVariantMap device;
@@ -436,6 +421,11 @@ QVariantList database::getDevices()
             device["accZ"] = acc_z;
             device["last_obs"] = last_obs;
             device["meas_seq"] = meas_seq;
+            device["pm25"] = pm25;
+            device["co2"] = co2;
+            device["voc"] = voc;
+            device["nox"] = nox;
+            device["calibrating"] = calibrating;
 
             devices.append(device);
         }

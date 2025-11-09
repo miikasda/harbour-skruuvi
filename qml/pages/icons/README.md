@@ -15,3 +15,8 @@ magick humidity.png -channel RGB -negate -fill "#E0E0E0" -colorize 100% humidity
 - [Alphabet icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/alphabet)
 - [Y icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/y)
 - [Z icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/z)
+- [Pm25 icons created by JK-Icon - Flaticon](https://www.flaticon.com/free-icons/pm25)
+- [CO2 cloud icons created by kmg design - Flaticon](https://www.flaticon.com/free-icons/co2-cloud)
+- [Chemical icons created by smashingstocks - Flaticon](https://www.flaticon.com/free-icons/chemical)
+- [Nitrogen icons created by Dimitry Miroliubov - Flaticon](https://www.flaticon.com/free-icons/nitrogen)
+- [Calibration icons created by Freepik - Flaticon](https://www.flaticon.com/free-icons/calibration)
