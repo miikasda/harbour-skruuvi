@@ -509,6 +509,12 @@ void database::removeDevice(const QString deviceAddress) {
     QString deleteAirPressureQuery = "DELETE FROM air_pressure WHERE device = '" + deviceAddress + "'";
     executeQuery(deleteAirPressureQuery);
 
+    // Remove from RuuviAir related tables
+    executeQuery("DELETE FROM pm25 WHERE device = '" + deviceAddress + "'");
+    executeQuery("DELETE FROM co2 WHERE device = '" + deviceAddress + "'");
+    executeQuery("DELETE FROM voc WHERE device = '" + deviceAddress + "'");
+    executeQuery("DELETE FROM nox WHERE device = '" + deviceAddress + "'");
+
     // Remove device from devices table
     QString deleteDeviceQuery = "DELETE FROM devices WHERE mac = '" + deviceAddress + "'";
     executeQuery(deleteDeviceQuery);
@@ -541,7 +547,8 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
     QTextStream stream(&file);
 
     // Get all measurements from db
-    QString selectQuery = "SELECT t.timestamp, temperature.value AS temperature, humidity.value AS humidity, air_pressure.value AS air_pressure"
+    QString selectQuery = "SELECT t.timestamp, temperature.value AS temperature, humidity.value AS humidity, air_pressure.value AS air_pressure,"
+                          " pm25.value AS pm25, co2.value AS co2, voc.value AS voc, nox.value AS nox"
                           " FROM ("
                           "     SELECT DISTINCT timestamp FROM temperature WHERE device = '" + deviceAddress + "' AND timestamp >= " + QString::number(startTime) +
                           "     AND timestamp <= " + QString::number(endTime) +
@@ -551,15 +558,31 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
                           "     UNION"
                           "     SELECT DISTINCT timestamp FROM air_pressure WHERE device = '" + deviceAddress + "' AND timestamp >= " + QString::number(startTime) +
                           "     AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM pm25 WHERE device = '" + deviceAddress + "'"
+                          "         AND timestamp >= " + QString::number(startTime) + " AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM co2 WHERE device = '" + deviceAddress + "'"
+                          "         AND timestamp >= " + QString::number(startTime) + " AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM voc WHERE device = '" + deviceAddress + "'"
+                          "         AND timestamp >= " + QString::number(startTime) + " AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM nox WHERE device = '" + deviceAddress + "'"
+                          "         AND timestamp >= " + QString::number(startTime) + " AND timestamp <= " + QString::number(endTime) +
                           " ) t"
                           " LEFT JOIN temperature ON t.timestamp = temperature.timestamp AND temperature.device = '" + deviceAddress + "'"
                           " LEFT JOIN humidity ON t.timestamp = humidity.timestamp AND humidity.device = '" + deviceAddress + "'"
                           " LEFT JOIN air_pressure ON t.timestamp = air_pressure.timestamp AND air_pressure.device = '" + deviceAddress + "'"
+                          " LEFT JOIN pm25 ON t.timestamp = pm25.timestamp AND pm25.device = '" + deviceAddress + "'"
+                          " LEFT JOIN co2 ON t.timestamp = co2.timestamp AND co2.device = '" + deviceAddress + "'"
+                          " LEFT JOIN voc ON t.timestamp = voc.timestamp AND voc.device = '" + deviceAddress + "'"
+                          " LEFT JOIN nox ON t.timestamp = nox.timestamp AND nox.device = '" + deviceAddress + "'"
                           " ORDER BY t.timestamp ASC";
     QSqlQuery query(db);
 
     // Write header to the CSV file
-    stream << "mac,name,timestamp,temperature,humidity,air_pressure\n";
+    stream << "mac,name,timestamp,temperature,humidity,air_pressure,pm25,co2,voc,nox\n";
     // Loop through the query results
     if (query.exec(selectQuery)) {
         while (query.next()) {
@@ -567,8 +590,13 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
             QString temperature = query.value(1).isNull() ? "-" : QString::number(query.value(1).toDouble());
             QString humidity = query.value(2).isNull() ? "-" : QString::number(query.value(2).toDouble());
             QString air_pressure = query.value(3).isNull() ? "-" : QString::number(query.value(3).toDouble());
+            QString pm25  = query.value(4).isNull() ? "-" : QString::number(query.value(4).toDouble());
+            QString co2   = query.value(5).isNull() ? "-" : QString::number(query.value(5).toDouble());
+            QString voc   = query.value(6).isNull() ? "-" : QString::number(query.value(6).toDouble());
+            QString nox   = query.value(7).isNull() ? "-" : QString::number(query.value(7).toDouble());
             // Write the data to the CSV file
-            stream << deviceAddress << "," << deviceName << "," << timestamp << "," << temperature << "," << humidity << "," << air_pressure << "\n";
+            stream << deviceAddress << "," << deviceName << "," << timestamp << "," << temperature << "," << humidity << ","
+                   << air_pressure << "," << pm25 << "," << co2 << "," << voc << "," << nox << "\n";
         }
     } else {
         qDebug() << "Error executing sensor data query:" << query.lastError().text();
