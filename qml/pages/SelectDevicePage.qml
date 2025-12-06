@@ -469,6 +469,7 @@ Page {
                             var selectedDevice = {
                                 deviceName: model.deviceName,
                                 deviceAddress: model.deviceAddress,
+                                isAir: isAir,
                             }
                             // On default show last 24h data
                             var currentTime = Math.floor(Date.now() / 1000);
@@ -485,7 +486,8 @@ Page {
                         onClicked: {
                             var selectedDevice = {
                                 deviceName: model.deviceName,
-                                deviceAddress: model.deviceAddress
+                                deviceAddress: model.deviceAddress,
+                                isAir: isAir,
                             }
                             // Handle button click to navigate to the page displaying data fetch setup
                             pageStack.push(Qt.resolvedUrl("GetDataPage.qml"), {selectedDevice: selectedDevice})

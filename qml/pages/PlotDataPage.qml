@@ -32,10 +32,15 @@ Page {
     property var maxPoints: 0
     property bool aggregated: false
     property real bucketDuration: 0
+    property bool airInfoExpanded: false
     // Use global data so we can redraw it
     property var tempData: []
     property var humidityData: []
     property var pressureData: []
+    property var pm25Data: []
+    property var co2Data: []
+    property var vocData: []
+    property var noxData: []
 
     function calculateUnixTimestamp(minute, hour, day, month, year) {
         var date = new Date(year, month - 1, day);
@@ -210,6 +215,17 @@ Page {
                     humidityGraph.setPoints(downsampleMinMax(humidityData, maxPoints));
                     pressureData = db.getSensorData(selectedDevice.deviceAddress, "air_pressure", startTime, endTime);
                     pressureGraph.setPoints(downsampleMinMax(pressureData, maxPoints));
+                    // Only fetch air-quality datasets if it's an Air device
+                    if (selectedDevice.isAir) {
+                        pm25Data = db.getSensorData(selectedDevice.deviceAddress, "pm25", startTime, endTime)
+                        co2Data  = db.getSensorData(selectedDevice.deviceAddress, "co2",  startTime, endTime)
+                        vocData  = db.getSensorData(selectedDevice.deviceAddress, "voc",  startTime, endTime)
+                        noxData  = db.getSensorData(selectedDevice.deviceAddress, "nox",  startTime, endTime)
+                        pm25Graph.setPoints(downsampleMinMax(pm25Data, maxPoints))
+                        co2Graph.setPoints(downsampleMinMax(co2Data, maxPoints))
+                        vocGraph.setPoints(downsampleMinMax(vocData, maxPoints))
+                        noxGraph.setPoints(downsampleMinMax(noxData, maxPoints))
+                    }
                 }
             }
          }
@@ -245,6 +261,22 @@ Page {
                 font.pixelSize: Theme.fontSizeSmall
             }
 
+            // --- Ruuvi Air info block ---
+            SectionHeader {
+                visible: selectedDevice.isAir
+                text: qsTr("Indoor air measurements")
+            }
+
+            Button {
+                visible: selectedDevice.isAir
+                width: parent.width - leftMargin - rightMargin
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: airInfoExpanded
+                    ? qsTr("Hide measurement info")
+                    : qsTr("Show measurement info")
+                onClicked: airInfoExpanded = !airInfoExpanded
+            }
+
             SectionHeader {
                 id: dataPlotHeader
                 text: "Data plots"
@@ -259,8 +291,27 @@ Page {
                     .arg(formatBinSize(bucketDuration))
             color: Theme.secondaryHighlightColor
             font.pixelSize: Theme.fontSizeSmall
-        }
+            }
 
+            // Temperature
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                leftPadding: leftMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: qsTr("Temperature")
+            }
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                width: parent.width
+                wrapMode: Text.Wrap
+                leftPadding: leftMargin
+                rightPadding: rightMargin
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: qsTr("Temperature shows how warm or cool your environment is. It affects comfort and energy use.")
+            }
             GraphData {
                 id: tempGraph
                 graphTitle: qsTr("Temperature")
@@ -268,17 +319,30 @@ Page {
                 scale: true
                 axisY.units: "°C"
                 onClicked: {
-                                pageStack.push(
-                                    Qt.resolvedUrl("GraphPage.qml"),
-                                    {
-                                       par_data: tempData,
-                                       par_title: graphTitle,
-                                       par_units: axisY.units
-                                    }
-                                );
+                    pageStack.push(Qt.resolvedUrl("GraphPage.qml"),
+                                { par_data: tempData, par_title: graphTitle, par_units: axisY.units })
                 }
             }
 
+            // Humidity
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                leftPadding: leftMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: qsTr("Humidity")
+            }
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                width: parent.width
+                wrapMode: Text.Wrap
+                leftPadding: leftMargin
+                rightPadding: rightMargin
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: qsTr("Humidity affects comfort, breathing and building health. Very dry or humid air can both feel uncomfortable.")
+            }
             GraphData {
                 id: humidityGraph
                 graphTitle: qsTr("Humidity")
@@ -286,17 +350,30 @@ Page {
                 scale: true
                 axisY.units: "%rH"
                 onClicked: {
-                                pageStack.push(
-                                    Qt.resolvedUrl("GraphPage.qml"),
-                                    {
-                                       par_data: humidityData,
-                                       par_title: graphTitle,
-                                       par_units: axisY.units
-                                    }
-                                );
+                    pageStack.push(Qt.resolvedUrl("GraphPage.qml"),
+                                { par_data: humidityData, par_title: graphTitle, par_units: axisY.units })
                 }
             }
 
+            // Air pressure
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                leftPadding: leftMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: qsTr("Air pressure")
+            }
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                width: parent.width
+                wrapMode: Text.Wrap
+                leftPadding: leftMargin
+                rightPadding: rightMargin
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: qsTr("Air pressure gives hints about weather changes and can influence how you feel.")
+            }
             GraphData {
                 id: pressureGraph
                 graphTitle: qsTr("Air pressure")
@@ -304,14 +381,140 @@ Page {
                 scale: true
                 axisY.units: "mBar"
                 onClicked: {
-                                pageStack.push(
-                                    Qt.resolvedUrl("GraphPage.qml"),
-                                    {
-                                       par_data: pressureData,
-                                       par_title: graphTitle,
-                                       par_units: axisY.units
-                                    }
-                                );
+                    pageStack.push(Qt.resolvedUrl("GraphPage.qml"),
+                                { par_data: pressureData, par_title: graphTitle, par_units: axisY.units })
+                }
+            }
+
+            /* ------------------------
+                Ruuvi Air graphs
+            ------------------------ */
+
+            // PM2.5
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                leftPadding: leftMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: qsTr("Particles (PM2.5)")
+            }
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                width: parent.width
+                wrapMode: Text.Wrap
+                leftPadding: leftMargin
+                rightPadding: rightMargin
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: qsTr("PM2.5 shows how many fine particles are in the air. High values may irritate lungs even if the air looks clean.")
+            }
+            GraphData {
+                visible: selectedDevice.isAir
+                id: pm25Graph
+                graphTitle: qsTr("PM2.5")
+                width: parent.width
+                scale: true
+                axisY.units: "µg/m³"
+                onClicked: {
+                    pageStack.push(Qt.resolvedUrl("GraphPage.qml"),
+                                { par_data: pm25Data, par_title: graphTitle, par_units: axisY.units })
+                }
+            }
+
+            // CO2
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                leftPadding: leftMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: qsTr("Carbon dioxide (CO\u2082)")
+            }
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                width: parent.width
+                wrapMode: Text.Wrap
+                leftPadding: leftMargin
+                rightPadding: rightMargin
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: qsTr("CO\u2082 levels reflect ventilation quality. High values can make you tired and reduce focus.")
+            }
+            GraphData {
+                visible: selectedDevice.isAir
+                id: co2Graph
+                graphTitle: qsTr("CO₂")
+                width: parent.width
+                scale: true
+                axisY.units: "ppm"
+                onClicked: {
+                    pageStack.push(Qt.resolvedUrl("GraphPage.qml"),
+                                { par_data: co2Data, par_title: graphTitle, par_units: axisY.units })
+                }
+            }
+
+            // VOC
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                leftPadding: leftMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: qsTr("VOC (Index)")
+            }
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                width: parent.width
+                wrapMode: Text.Wrap
+                leftPadding: leftMargin
+                rightPadding: rightMargin
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: qsTr("The VOC index indicates how many volatile compounds are present. Values above 100 signal increased VOCs.")
+            }
+            GraphData {
+                visible: selectedDevice.isAir
+                id: vocGraph
+                graphTitle: qsTr("VOC Index")
+                width: parent.width
+                scale: true
+                axisY.units: ""
+                onClicked: {
+                    pageStack.push(Qt.resolvedUrl("GraphPage.qml"),
+                                { par_data: vocData, par_title: graphTitle, par_units: axisY.units })
+                }
+            }
+
+            // NOX
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                leftPadding: leftMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: qsTr("NOx (Index)")
+            }
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                width: parent.width
+                wrapMode: Text.Wrap
+                leftPadding: leftMargin
+                rightPadding: rightMargin
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: qsTr("The NOx index tracks nitrogen oxides from traffic and combustion. Higher values mean poorer air quality.")
+            }
+            GraphData {
+                visible: selectedDevice.isAir
+                id: noxGraph
+                graphTitle: qsTr("NOx Index")
+                width: parent.width
+                scale: true
+                axisY.units: ""
+                onClicked: {
+                    pageStack.push(Qt.resolvedUrl("GraphPage.qml"),
+                                { par_data: noxData, par_title: graphTitle, par_units: axisY.units })
                 }
             }
 
@@ -323,6 +526,17 @@ Page {
                 humidityGraph.setPoints(downsampleMinMax(humidityData, maxPoints));
                 pressureData = db.getSensorData(selectedDevice.deviceAddress, "air_pressure", startTime, endTime);
                 pressureGraph.setPoints(downsampleMinMax(pressureData, maxPoints));
+                // Only fetch air-quality datasets if it's an Air device
+                if (selectedDevice.isAir) {
+                    pm25Data = db.getSensorData(selectedDevice.deviceAddress, "pm25", startTime, endTime)
+                    co2Data  = db.getSensorData(selectedDevice.deviceAddress, "co2",  startTime, endTime)
+                    vocData  = db.getSensorData(selectedDevice.deviceAddress, "voc",  startTime, endTime)
+                    noxData  = db.getSensorData(selectedDevice.deviceAddress, "nox",  startTime, endTime)
+                    pm25Graph.setPoints(downsampleMinMax(pm25Data, maxPoints))
+                    co2Graph.setPoints(downsampleMinMax(co2Data, maxPoints))
+                    vocGraph.setPoints(downsampleMinMax(vocData, maxPoints))
+                    noxGraph.setPoints(downsampleMinMax(noxData, maxPoints))
+                }
             }
 
             SectionHeader {
@@ -410,6 +624,12 @@ Page {
                 tempGraph.setPoints(downsampleMinMax(tempData, maxPoints));
                 humidityGraph.setPoints(downsampleMinMax(humidityData, maxPoints));
                 pressureGraph.setPoints(downsampleMinMax(pressureData, maxPoints));
+                if (selectedDevice.isAir) {
+                    pm25Graph.setPoints(downsampleMinMax(pm25Data, maxPoints))
+                    co2Graph.setPoints(downsampleMinMax(co2Data, maxPoints))
+                    vocGraph.setPoints(downsampleMinMax(vocData, maxPoints))
+                    noxGraph.setPoints(downsampleMinMax(noxData, maxPoints))
+                }
             }
         }
     }
