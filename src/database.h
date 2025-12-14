@@ -41,6 +41,7 @@ public:
     Q_INVOKABLE void removeDevice(const QString deviceAddress);
     Q_INVOKABLE QString exportCSV(const QString deviceAddress, const QString deviceName, int startTime, int endTime);
     Q_INVOKABLE void setLastSync(const QString& deviceAddress, const QString& deviceName, int timestamp);
+    Q_INVOKABLE QVariantList calculateIAQSList(const QVariantList &pm25Data, const QVariantList &co2Data);
 
 private:
     QSqlDatabase db;
@@ -49,6 +50,7 @@ private:
         double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
     void updateRuuviAir(const QString &mac, double temperature, double humidity, double pressure,
         double pm25, int co2, int voc, int nox, int calibrating, int sequence, int timestamp);
+    double calculateIAQS(double pm25, double co2);
 
 signals:
     void inputFinished();
@@ -56,7 +58,7 @@ signals:
         const QString &mac, double temperature, double humidity, double pressure, double accX, double accY, double accZ,
         double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
     void airDeviceDataUpdated(const QString &mac, double temperature, double humidity, double pressure, double pm25,
-                              int co2, int voc, int nox, int calibrating, int sequence, int timestamp);
+                              int co2, int voc, int nox, double iaqs, int calibrating, int sequence, int timestamp);
 };
 
 #endif // DATABASE_H

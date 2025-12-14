@@ -22,6 +22,7 @@
 #include <QThread>
 #include <QFile>
 #include <QTextStream>
+#include <cmath>
 
 
 database::database(QObject* parent) : QObject(parent) {
@@ -187,6 +188,89 @@ void database::updateDevice(const QString &mac, double temperature, double humid
     }
 }
 
+double database::calculateIAQS(double pm25, double co2){
+    // Documentation: https://docs.ruuvi.com/ruuvi-air-firmware/ruuvi-indoor-air-quality-score-iaqs
+
+    // Return NaN if inputs are invalid
+    if (!std::isfinite(pm25) || !std::isfinite(co2)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    if (pm25 < 0 || co2 < 1) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    // Constants (from Ruuvi IAQS reference implementation)
+    const double AQI_MAX = 100.0;
+    const double PM25_MIN   = 0.0;
+    const double PM25_MAX   = 60.0;
+    const double PM25_SCALE = AQI_MAX / (PM25_MAX - PM25_MIN); // ~1.6667
+    const double CO2_MIN    = 420.0;
+    const double CO2_MAX    = 2300.0;
+    const double CO2_SCALE  = AQI_MAX / (CO2_MAX - CO2_MIN);   // ~0.05319
+
+    // Clamp helper
+    auto clamp = [](double v, double lo, double hi) {
+        return std::min(std::max(v, lo), hi);
+    };
+
+    // Clamp values to valid input range
+    pm25 = clamp(pm25, PM25_MIN, PM25_MAX);
+    co2  = clamp(co2,  CO2_MIN,  CO2_MAX);
+
+    // Convert into normalized distances
+    double dx = (pm25 - PM25_MIN) * PM25_SCALE;  // 0..100
+    double dy = (co2  - CO2_MIN)  * CO2_SCALE;   // 0..100
+
+    // Hypotenuse = combined pollution index
+    double r = std::hypot(dx, dy);
+
+    // IAQS is 100 - distance
+    double iaqs = AQI_MAX - r;
+
+    // Clamp 0–100
+    iaqs = clamp(iaqs, 0.0, AQI_MAX);
+
+    // Ruuvi specification: round to nearest integer
+    return std::round(iaqs);
+}
+
+QVariantList database::calculateIAQSList(const QVariantList &pm25Data,
+                                         const QVariantList &co2Data)
+{
+    // Matches timestamps on pm25 and co2 data, and calculates IAQS based on the matched timestamps
+    QVariantList result;
+
+    int i = 0, j = 0;
+    while (i < pm25Data.size() && j < co2Data.size()) {
+        const QVariantMap p = pm25Data[i].toMap();
+        const QVariantMap c = co2Data[j].toMap();
+
+        int t1 = p["x"].toInt();
+        int t2 = c["x"].toInt();
+
+        if (t1 == t2) {
+            double pm25 = p["y"].toDouble();
+            double co2  = c["y"].toDouble();
+
+            int iaqs = calculateIAQS(pm25, co2);
+
+            QVariantMap v;
+            v["x"] = t1;
+            v["y"] = iaqs >= 0 ? iaqs : QVariant(); // null if invalid
+            result.append(v);
+
+            ++i; ++j;
+        }
+        else if (t1 < t2) {
+            ++i;
+        }
+        else {
+            ++j;
+        }
+    }
+    return result;
+}
+
 void database::updateRuuviAir(const QString &mac, double temperature, double humidity, double pressure, double pm25,
                               int co2, int voc, int nox, int calibrating, int sequence, int timestamp)
 {
@@ -335,8 +419,11 @@ void database::inputManufacturerData(const QString &deviceAddress, const std::ar
             insertSensorData(deviceAddress, "nox", {{timestamp, double(nox)}});
         }
 
+        // Calculate IAQS
+        double iaqs = calculateIAQS(pm25, co2);
+
         // Emit signal with new readings
-        emit airDeviceDataUpdated(deviceAddress, temperature, humidity, pressure, pm25, co2, voc, nox, calibrationInProgress, sequence, timestamp);
+        emit airDeviceDataUpdated(deviceAddress, temperature, humidity, pressure, pm25, co2, voc, nox, iaqs, calibrationInProgress, sequence, timestamp);
     }
     else {
         qDebug() << "Unknown data format:" << dataFormat;
@@ -405,6 +492,12 @@ QVariantList database::getDevices()
             QString voc = query.value("voc").isNull() ? "NA" : QString::number(query.value("voc").toInt());
             QString nox = query.value("nox").isNull() ? "NA" : QString::number(query.value("nox").toInt());
             QString calibrating = query.value("calibrating").isNull() ? "NA" : QString::number(query.value("calibrating").toInt());
+            QString iaqs = "NA";
+            if (!query.value("pm25").isNull() && !query.value("co2").isNull()) {
+                iaqs = QString::number(
+                    calculateIAQS(query.value("pm25").toDouble(), query.value("co2").toDouble())
+                );
+            }
 
             // TODO Remove the device prefix...
             QVariantMap device;
@@ -426,7 +519,7 @@ QVariantList database::getDevices()
             device["voc"] = voc;
             device["nox"] = nox;
             device["calibrating"] = calibrating;
-
+            device["iaqs"] = iaqs;
             devices.append(device);
         }
     } else {
@@ -582,7 +675,7 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
     QSqlQuery query(db);
 
     // Write header to the CSV file
-    stream << "mac,name,timestamp,temperature,humidity,air_pressure,pm25,co2,voc,nox\n";
+    stream << "mac,name,timestamp,temperature,humidity,air_pressure,pm25,co2,voc,nox,iaqs\n";
     // Loop through the query results
     if (query.exec(selectQuery)) {
         while (query.next()) {
@@ -594,9 +687,16 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
             QString co2   = query.value(5).isNull() ? "-" : QString::number(query.value(5).toDouble());
             QString voc   = query.value(6).isNull() ? "-" : QString::number(query.value(6).toDouble());
             QString nox   = query.value(7).isNull() ? "-" : QString::number(query.value(7).toDouble());
+            QString iaqs = "-";
+            if (!query.value(4).isNull() && !query.value(5).isNull()) {
+                iaqs = QString::number(
+                    calculateIAQS(query.value(4).toDouble(),
+                                query.value(5).toDouble())
+                );
+            }
             // Write the data to the CSV file
             stream << deviceAddress << "," << deviceName << "," << timestamp << "," << temperature << "," << humidity << ","
-                   << air_pressure << "," << pm25 << "," << co2 << "," << voc << "," << nox << "\n";
+                   << air_pressure << "," << pm25 << "," << co2 << "," << voc << "," << nox << "," << iaqs << "\n";
         }
     } else {
         qDebug() << "Error executing sensor data query:" << query.lastError().text();

@@ -29,6 +29,15 @@ Page {
         }
     }
 
+    function iaqsColor(iaqs) {
+        if (isNaN(iaqs)) return "transparent"
+        if (iaqs >= 90) return "#00c8c8"   // Turquoise
+        if (iaqs >= 80) return "#00a000"   // Green
+        if (iaqs >= 50) return "#ffd000"   // Yellow
+        if (iaqs >= 10) return "#ff8800"   // Orange
+        return "#ff0000"                // Red
+    }
+
     SilicaFlickable {
         anchors.fill: parent
 
@@ -131,6 +140,7 @@ Page {
                         co2: device.co2,
                         voc: device.voc,
                         nox: device.nox,
+                        iaqs: device.iaqs,
                         // Convert calibration flag to UI text
                         calibrating: (device.calibrating === "NA")
                                         ? "NA"
@@ -205,6 +215,7 @@ Page {
                     }
 
                     Column {
+                        id: mainInfoCol
                         anchors.left: icon.right
                         anchors.leftMargin: Theme.paddingMedium
                         anchors.verticalCenter: parent.verticalCenter
@@ -267,6 +278,19 @@ Page {
                         }
                     }
 
+                    // IAQS to the right of main info col
+                    Label {
+                        visible: isAir && model.iaqs !== undefined && model.iaqs !== "NA"
+                        anchors {
+                            left: mainInfoCol.right
+                            leftMargin: 2 * Theme.paddingLarge
+                            verticalCenter: parent.verticalCenter
+                        }
+                        text: Number(model.iaqs).toFixed(0)
+                        font.pixelSize: Theme.fontSizeExtraLarge
+                        font.bold: true
+                        color: iaqsColor(Number(model.iaqs))
+                    }
 
                     // New column for latest readings
                     Column {
@@ -607,6 +631,7 @@ Page {
                     deviceModel.setProperty(i, "co2", co2.toString())
                     deviceModel.setProperty(i, "voc", voc.toString())
                     deviceModel.setProperty(i, "nox", nox.toString())
+                    deviceModel.setProperty(i, "iaqs", iaqs.toString())
                     deviceModel.setProperty(i, "calibrating", calibrating ? "Yes" : "No")
                     deviceModel.setProperty(i, "meas_seq", sequence.toString())
                     deviceModel.setProperty(i, "last_obs", timestamp.toString())
@@ -656,6 +681,7 @@ Page {
                     co2:         isAir ? undefined : "NA",
                     voc:         isAir ? undefined : "NA",
                     nox:         isAir ? undefined : "NA",
+                    iaqs:        isAir ? undefined : "NA",
                     calibrating: isAir ? undefined : "NA"
                 });
             }

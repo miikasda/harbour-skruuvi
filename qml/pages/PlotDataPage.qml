@@ -41,6 +41,7 @@ Page {
     property var co2Data: []
     property var vocData: []
     property var noxData: []
+    property var iaqsData: []
 
     function calculateUnixTimestamp(minute, hour, day, month, year) {
         var date = new Date(year, month - 1, day);
@@ -221,10 +222,12 @@ Page {
                         co2Data  = db.getSensorData(selectedDevice.deviceAddress, "co2",  startTime, endTime)
                         vocData  = db.getSensorData(selectedDevice.deviceAddress, "voc",  startTime, endTime)
                         noxData  = db.getSensorData(selectedDevice.deviceAddress, "nox",  startTime, endTime)
+                        iaqsData = db.calculateIAQSList(pm25Data, co2Data)
                         pm25Graph.setPoints(downsampleMinMax(pm25Data, maxPoints))
                         co2Graph.setPoints(downsampleMinMax(co2Data, maxPoints))
                         vocGraph.setPoints(downsampleMinMax(vocData, maxPoints))
                         noxGraph.setPoints(downsampleMinMax(noxData, maxPoints))
+                        iaqsGraph.setPoints(downsampleMinMax(iaqsData, maxPoints))
                     }
                 }
             }
@@ -518,6 +521,38 @@ Page {
                 }
             }
 
+            //IAQS
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                leftPadding: leftMargin
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: qsTr("Indoor Air Quality Score (IAQS)")
+            }
+            Label {
+                visible: selectedDevice.isAir && airInfoExpanded
+                width: parent.width
+                wrapMode: Text.Wrap
+                leftPadding: leftMargin
+                rightPadding: rightMargin
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: qsTr("The IAQS considers CO₂ and PM₂.₅, providing values between 0-100. Higher value means better air quality.")
+            }
+            GraphData {
+                visible: selectedDevice.isAir
+                id: iaqsGraph
+                graphTitle: qsTr("Indoor Air Quality Score (IAQS)")
+                width: parent.width
+                scale: true
+                axisY.units: ""
+                onClicked: {
+                    pageStack.push(Qt.resolvedUrl("GraphPage.qml"),
+                                { par_data: iaqsData, par_title: graphTitle, par_units: axisY.units })
+                }
+            }
+
             Component.onCompleted: {
                 maxPoints = tempGraph.width;
                 tempData = db.getSensorData(selectedDevice.deviceAddress, "temperature", startTime, endTime);
@@ -532,10 +567,12 @@ Page {
                     co2Data  = db.getSensorData(selectedDevice.deviceAddress, "co2",  startTime, endTime)
                     vocData  = db.getSensorData(selectedDevice.deviceAddress, "voc",  startTime, endTime)
                     noxData  = db.getSensorData(selectedDevice.deviceAddress, "nox",  startTime, endTime)
+                    iaqsData = db.calculateIAQSList(pm25Data, co2Data)
                     pm25Graph.setPoints(downsampleMinMax(pm25Data, maxPoints))
                     co2Graph.setPoints(downsampleMinMax(co2Data, maxPoints))
                     vocGraph.setPoints(downsampleMinMax(vocData, maxPoints))
                     noxGraph.setPoints(downsampleMinMax(noxData, maxPoints))
+                    iaqsGraph.setPoints(downsampleMinMax(iaqsData, maxPoints))
                 }
             }
 
@@ -629,6 +666,7 @@ Page {
                     co2Graph.setPoints(downsampleMinMax(co2Data, maxPoints))
                     vocGraph.setPoints(downsampleMinMax(vocData, maxPoints))
                     noxGraph.setPoints(downsampleMinMax(noxData, maxPoints))
+                    iaqsGraph.setPoints(downsampleMinMax(iaqsData, maxPoints))
                 }
             }
         }
