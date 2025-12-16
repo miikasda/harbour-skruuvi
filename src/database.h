@@ -54,6 +54,7 @@ private:
 
 signals:
     void inputFinished();
+    void inputProgress(int step);
     void deviceDataUpdated(
         const QString &mac, double temperature, double humidity, double pressure, double accX, double accY, double accZ,
         double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);

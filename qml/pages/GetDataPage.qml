@@ -31,6 +31,11 @@ Page {
     property int logStart: 0
     property int syncStart: 0
 
+    // Progressbar properties
+    property bool dbInserting: false
+    property int dbInsertStep: 0
+    property int dbInsertTotal: selectedDevice.isAir ? 7 : 3
+
     function constructUnixTimestamp(minute, hour, day, month, year) {
         var date = new Date(year, month - 1, day, hour, minute);
         var unixTimestamp = Math.floor(date.getTime() / 1000);
@@ -59,6 +64,8 @@ Page {
         onInputFinished: {
             // Handle the database input finish
             loadingScreen.running = false;
+            dbInserting = false;
+            dbInsertStep = 0;
 
             // Change to the page displaying the data
             var currentTime = Math.floor(Date.now() / 1000);
@@ -67,6 +74,10 @@ Page {
                 endTime: currentTime,
                 selectedDevice: selectedDevice
             });
+        }
+        onInputProgress: {
+            dbInserting = true
+            dbInsertStep = step
         }
     }
 
@@ -208,6 +219,18 @@ Page {
             id: loadingScreen
             running: false
         }
+        ProgressBar {
+            width: parent.width - Theme.horizontalPageMargin * 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: dbInserting
+            anchors.top: loadingScreen.bottom
+            anchors.topMargin: Theme.paddingMedium
+            minimumValue: 0
+            maximumValue: dbInsertTotal
+            value: dbInsertStep
+            label: "Saving to database"
+            valueText: dbInsertStep + " / " + dbInsertTotal
+        }
     }
 
     // Show that the data fetch failed
@@ -286,6 +309,8 @@ Page {
             // Check if the first keyword is "data" indicating returned readings
             if (data[0] === "data") {
                 loadingScreen.text = "Data fetched, appending to database"
+                dbInserting = true
+                dbInsertStep = 0
 
                 // Parse minimum timestamp and set it as logStart
                 if (data && data.length > 1) {

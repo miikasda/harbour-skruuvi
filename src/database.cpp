@@ -323,6 +323,7 @@ void database::inputRawData(QString deviceAddress, QString deviceName, const QVa
     connect(thread, &QThread::started, workerObj, &worker::inputRawData);
     connect(workerObj, &worker::inputFinished, this, &database::inputFinished);
     connect(workerObj, &worker::inputFinished, thread, &QThread::quit);
+    connect(workerObj, &worker::inputProgress, this, &database::inputProgress);
     // Start the thread
     thread->start();
 }

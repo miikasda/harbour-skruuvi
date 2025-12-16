@@ -131,24 +131,31 @@ void worker::inputRawData() {
 
     // Insert the sensor data if the corresponding lists are not empty
     if (!temperatureList.isEmpty()) {
+        emit inputProgress(1);
         db->insertSensorData(deviceAddress, "temperature", temperatureList);
     }
     if (!humidityList.isEmpty()) {
+        emit inputProgress(2);
         db->insertSensorData(deviceAddress, "humidity", humidityList);
     }
     if (!airPressureList.isEmpty()) {
+        emit inputProgress(3);
         db->insertSensorData(deviceAddress, "air_pressure", airPressureList);
     }
     if (!pm25List.isEmpty()) {
+        emit inputProgress(4);
         db->insertSensorData(deviceAddress, "pm25", pm25List);
     }
     if (!co2List.isEmpty()) {
+        emit inputProgress(5);
         db->insertSensorData(deviceAddress, "co2", co2List);
     }
     if (!vocList.isEmpty()) {
+        emit inputProgress(6);
         db->insertSensorData(deviceAddress, "voc", vocList);
     }
     if (!noxList.isEmpty()) {
+        emit inputProgress(7);
         db->insertSensorData(deviceAddress, "nox", noxList);
     }
     qDebug() << "Inserted sensor data";
