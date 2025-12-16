@@ -136,13 +136,13 @@ Page {
             SectionHeader {
                 //id: dataLabel
                 text: "Data to fetch"
-                visible: !loadingScreen.running
+                visible: !loadingScreen.running && !selectedDevice.isAir
             }
 
             ComboBox {
                 id: dataSelection
                 label: "Data to fetch:"
-                visible: !loadingScreen.running
+                visible: !loadingScreen.running && !selectedDevice.isAir
 
                 menu: ContextMenu {
                     MenuItem { text: "all" }
@@ -271,7 +271,7 @@ Page {
                 logStart = constructUnixTimestamp(pickedMinute, pickedHour, dateChosen.day, dateChosen.month, dateChosen.year)
             }
             syncStart = Math.floor(Date.now() / 1000);
-            call('ruuvi_read.ruuvi_tag_reader.get_logs', [selectedDevice.deviceAddress, logStart, dataSelection.value], function() {});
+            call('ruuvi_read.ruuvi_tag_reader.get_logs', [selectedDevice.deviceAddress, logStart, dataSelection.value, selectedDevice.isAir], function() {});
         }
 
         onReceived: {

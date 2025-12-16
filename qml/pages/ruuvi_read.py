@@ -1,4 +1,4 @@
-"""Read raw data from RuuviTag device.
+"""Read raw data from Ruuvi devices.
 
 Implementation is based on Bleak example at
 https://github.com/hbldh/bleak/blob/develop/examples/uart_service.py
@@ -40,11 +40,16 @@ TEMPERATURE = 0x30
 HUMIDITY = 0x31
 AIR_PRESSURE = 0x32
 ALL_SENSORS = 0x3A
+AIR_ENDPOINT = 0x3B
 # Charasteristic UUIDS
 UART_RX_CHAR_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 UART_TX_CHAR_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
-# Magic values
+# Magic values (RuuviTag)
 LOG_READ = 0x11  # Log read command
+# Magic values (RuuviAir)
+AIR_LOG_READ_MULTI = 0x21
+AIR_LOG_WRITE_MULTI = 0x20
+AIR_RECORD_LEN = 38  # bytes
 
 
 class RuuviTagReader:
@@ -57,6 +62,7 @@ class RuuviTagReader:
         self.destination = None
         self.start_timestamp = None
         self.log_data_end_of_data = False
+        self.is_air = False
         # Use keyword data to distuinguish when data is sent with pyotherside
         self.received_data = ["data"]
         self.data_received_amount = 0
@@ -76,27 +82,88 @@ class RuuviTagReader:
             print("Received empty data", flush=True)
         else:
             if data[0] == self.destination:
-                if len(data) != 11:
-                    print("Wrong data size", flush=True)
+                if not self.is_air:
+                    # Device is RuuviTag
+                    if len(data) != 11:
+                        print("Wrong data size", flush=True)
+                    else:
+                        # Unpack binary data
+                        # Header: Read command, Sensor, LOG_WRITE
+                        # Payload: 4 bytes of timestamp and 4 bytes of value
+                        dat = struct.unpack('>BBBII', data)
+                        if dat[3] == 0xFFFFFFFF and dat[4] == 0xFFFFFFFF:
+                            print("End of output received", flush=True)
+                            # Send data to QML
+                            pyotherside.send(self.received_data)
+                            self.log_data_end_of_data = True
+                        else:
+                            # Gather data
+                            self.received_data.append(dat)
+                            # Send update to QML that we got data
+                            self.data_received_amount += 1
+                            pyotherside.send([
+                                                "data_received_amount",
+                                                self.data_received_amount
+                                            ])
                 else:
-                    # Unpack binary data
-                    # Header: Read command, Sensor, LOG_WRITE
-                    # Payload: 4 bytes of timestamp and 4 bytes of value
-                    dat = struct.unpack('>BBBII', data)
-                    if dat[3] == 0xFFFFFFFF and dat[4] == 0xFFFFFFFF:
-                        print("End of output received", flush=True)
-                        # Send data to QML
+                    # Device is RuuviAir
+                    # Packet: dest(1), src(1), op(1), num(1), rec_len(1), payload...
+                    if len(data) < 5:
+                        print("Too short data (air)", flush=True)
+                        return
+
+                    op = data[2]
+                    if op != AIR_LOG_WRITE_MULTI:
+                        return
+
+                    num = data[3]
+                    rec_len = data[4]
+
+                    # End marker: num=0 and rec_len=38
+                    if num == 0 and rec_len == AIR_RECORD_LEN:
+                        print("End of output received (air)", flush=True)
                         pyotherside.send(self.received_data)
                         self.log_data_end_of_data = True
-                    else:
-                        # Gather data
+                        return
+
+                    if rec_len != AIR_RECORD_LEN:
+                        print(f"Unexpected record length (air): {rec_len}", flush=True)
+                        return
+
+                    expected = 5 + (num * rec_len)
+                    if len(data) < expected:
+                        print(f"Short packet (air): got {len(data)} expected {expected}", flush=True)
+                        return
+
+                    # Parse each 38-byte record
+                    off = 5
+                    for _ in range(num):
+                        rec = data[off:off + rec_len]
+                        off += rec_len
+
+                        ts = struct.unpack(">I", rec[0:4])[0]
+
+                        temp_raw = struct.unpack(">h", rec[5:7])[0]
+                        hum_raw  = struct.unpack(">H", rec[7:9])[0]
+                        pres_raw = struct.unpack(">H", rec[9:11])[0]
+
+                        pm25_raw = struct.unpack(">H", rec[13:15])[0]
+                        co2_raw  = struct.unpack(">H", rec[19:21])[0]
+
+                        voc_raw  = rec[21]
+                        nox_raw  = rec[22]
+                        flags    = rec[32]
+
+                        # dat tuple: BBB header first, then raw fields
+                        dat = (data[0], data[1], data[2],
+                            ts, temp_raw, hum_raw, pres_raw,
+                            pm25_raw, co2_raw, voc_raw, nox_raw, flags)
+
                         self.received_data.append(dat)
-                        # Send update to QML that we got data
                         self.data_received_amount += 1
-                        pyotherside.send([
-                                            "data_received_amount",
-                                            self.data_received_amount
-                                        ])
+
+                    pyotherside.send(["data_received_amount", self.data_received_amount])
+
 
     async def read_log_data(self):
         print(f"Searching for Ruuvi {self.device_address}", flush=True)
@@ -118,7 +185,7 @@ class RuuviTagReader:
             tx_data = b''
             tx_data += bytes([self.destination])
             tx_data += bytes([self.destination])
-            tx_data += bytes([LOG_READ])
+            tx_data += bytes([AIR_LOG_READ_MULTI if self.is_air else LOG_READ])
             # Payload: Two 32-bit timestamps. First timestamp is current time,
             # and second time is the lower bound of log data
             tx_data += struct.pack('>I', int(time()))
@@ -139,25 +206,29 @@ class RuuviTagReader:
                     break
                 await asyncio.sleep(1)
 
-    def run(self, device_address, start_timestamp, sensor):
+    def run(self, device_address, start_timestamp, sensor, isAir):
         # Clear the class attributes for this run
         self.received_data = ["data"]
         self.log_data_end_of_data = False
         self.data_received_amount = 0
+        self.is_air = bool(isAir)
 
         # Set the attributes for this run
         start_timestamp = int(start_timestamp)
         self.start_timestamp = start_timestamp
         self.device_address = device_address
         # Parse log type
-        if sensor == "all":
-            self.destination = ALL_SENSORS
-        elif sensor == "temperature":
-            self.destination = TEMPERATURE
-        elif sensor == "humidity":
-            self.destination = HUMIDITY
+        if self.is_air:
+            self.destination = AIR_ENDPOINT
         else:
-            self.destination = AIR_PRESSURE
+            if sensor == "all":
+                self.destination = ALL_SENSORS
+            elif sensor == "temperature":
+                self.destination = TEMPERATURE
+            elif sensor == "humidity":
+                self.destination = HUMIDITY
+            else:
+                self.destination = AIR_PRESSURE
 
         # Read the logs
         try:
@@ -174,7 +245,7 @@ class RuuviTagReader:
         except asyncio.exceptions.TimeoutError:
             pyotherside.send(["failed", "Could not find the device"])
 
-    def get_logs(self, device_address, start_timestamp, sensor):
+    def get_logs(self, device_address, start_timestamp, sensor, isAir):
         if self.bgthread.is_alive():
             # Old run not finished yet, wait a bit and retry for 5 times
             i = 0
@@ -191,7 +262,8 @@ class RuuviTagReader:
                                          args=(
                                                 device_address,
                                                 start_timestamp,
-                                                sensor
+                                                sensor,
+                                                isAir
                                               )
                                          )
         self.bgthread.start()
