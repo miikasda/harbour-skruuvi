@@ -706,3 +706,19 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
     file.close();
     return csvPath;
 }
+
+void database::requestPlotData(QString deviceAddress, bool isAir, int startTime, int endTime, int maxPoints) {
+    QThread* thread = new QThread(this);
+
+    worker* workerObj = new worker(this, deviceAddress, isAir, startTime, endTime, maxPoints);
+    workerObj->moveToThread(thread);
+
+    connect(thread, &QThread::started, workerObj, &worker::plotData);
+    connect(workerObj, &worker::plotReady, this, &database::plotDataReady);
+
+    connect(workerObj, &worker::plotReady, thread, &QThread::quit);
+    connect(thread, &QThread::finished, workerObj, &QObject::deleteLater);
+    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+
+    thread->start();
+}

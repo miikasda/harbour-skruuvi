@@ -33,6 +33,7 @@ Page {
     property bool aggregated: false
     property real bucketDuration: 0
     property bool airInfoExpanded: false
+    property bool plotting: false
     // Use global data so we can redraw it
     property var tempData: []
     property var humidityData: []
@@ -42,6 +43,14 @@ Page {
     property var vocData: []
     property var noxData: []
     property var iaqsData: []
+    property var tempPlotData: []
+    property var humidityPlotData: []
+    property var pressurePlotData: []
+    property var pm25PlotData: []
+    property var co2PlotData: []
+    property var vocPlotData: []
+    property var noxPlotData: []
+    property var iaqsPlotData: []
 
     function calculateUnixTimestamp(minute, hour, day, month, year) {
         var date = new Date(year, month - 1, day);
@@ -61,111 +70,6 @@ Page {
             return Math.round(seconds / 86400) + " d";
     }
 
-    function downsampleMinMax(points, maxPoints) {
-        if (!points || points.length === 0) {
-            // If no data, return empty
-            plotDataPage.aggregated = false
-            plotDataPage.bucketDuration = 0
-            return [];
-        }
-
-        if (points.length <= 2 * maxPoints) {
-            // No need to downsample
-            // 2 x maxpoints = every bucket would have min and max value
-            plotDataPage.aggregated = false
-            plotDataPage.bucketDuration = 0
-            return points;
-        }
-
-        // Determine total time range
-        var minX = points[0].x;
-        var maxX = points[points.length - 1].x;
-        var range = maxX - minX;
-        if (range <= 0) {
-            // No meaningful time span, return original
-            plotDataPage.aggregated = false
-            plotDataPage.bucketDuration = 0
-            return points;
-        }
-
-        // Each bucket spans this many seconds
-        var bucketDuration = range / maxPoints;
-        plotDataPage.bucketDuration = bucketDuration;
-
-        var sampled = [];
-        var bucketStart = minX;
-        var bucketEnd = bucketStart + bucketDuration;
-        var bucket = [];
-
-        for (var i = 0; i < points.length; i++) {
-            var p = points[i];
-
-            // If point belongs to current bucket
-            if (p.x <= bucketEnd) {
-                bucket.push(p);
-            } else {
-                // Process the finished bucket
-                if (bucket.length > 0) {
-                    var minPoint = bucket[0];
-                    var maxPoint = bucket[0];
-
-                    // Find min and max for this bucket
-                    for (var j = 1; j < bucket.length; j++) {
-                        if (bucket[j].y < minPoint.y) minPoint = bucket[j];
-                        if (bucket[j].y > maxPoint.y) maxPoint = bucket[j];
-                    }
-
-                    // Add in chronological order the min and max
-                    if (minPoint === maxPoint) {
-                        sampled.push(minPoint);
-                    } else if (minPoint.x < maxPoint.x) {
-                        sampled.push(minPoint);
-                        sampled.push(maxPoint);
-                    } else {
-                        sampled.push(maxPoint);
-                        sampled.push(minPoint);
-                    }
-                }
-
-                // Start a new bucket
-                bucket = [p];
-                bucketStart = bucketEnd;
-                bucketEnd = bucketStart + bucketDuration;
-            }
-        }
-
-        // Process last bucket
-        if (bucket.length > 0) {
-            var minPoint = bucket[0];
-            var maxPoint = bucket[0];
-            for (var j = 1; j < bucket.length; j++) {
-                if (bucket[j].y < minPoint.y) minPoint = bucket[j];
-                if (bucket[j].y > maxPoint.y) maxPoint = bucket[j];
-            }
-            if (minPoint === maxPoint) {
-                sampled.push(minPoint);
-            } else if (minPoint.x < maxPoint.x) {
-                sampled.push(minPoint);
-                sampled.push(maxPoint);
-            } else {
-                sampled.push(maxPoint);
-                sampled.push(minPoint);
-            }
-        }
-
-        // DEBUG: log downsampling result
-        var reduced = points.length - sampled.length;
-        console.log(
-            "Downsampled " + points.length + " → " + sampled.length +
-            " points (reduced by " + reduced + ")" +
-            " over " + formatBinSize(range) +
-            " (bucketDuration ≈ " + formatBinSize(bucketDuration) + ")"
-        );
-
-        plotDataPage.aggregated = true
-        return sampled;
-    }
-
     allowedOrientations: Orientation.All
 
     VerticalScrollDecorator {
@@ -182,6 +86,7 @@ Page {
         id: flickable
         anchors.fill: parent
         contentHeight: column.height
+        visible: !plotting
 
         PullDownMenu {
             MenuItem {
@@ -208,30 +113,12 @@ Page {
                         // No end time; fetch up to current time
                         endTime = Math.floor(Date.now() / 1000);
                     }
-                    maxPoints = tempGraph.width;
-                    // Fetch and plot the data
-                    tempData = db.getSensorData(selectedDevice.deviceAddress, "temperature", startTime, endTime);
-                    tempGraph.setPoints(downsampleMinMax(tempData, maxPoints));
-                    humidityData = db.getSensorData(selectedDevice.deviceAddress, "humidity", startTime, endTime);
-                    humidityGraph.setPoints(downsampleMinMax(humidityData, maxPoints));
-                    pressureData = db.getSensorData(selectedDevice.deviceAddress, "air_pressure", startTime, endTime);
-                    pressureGraph.setPoints(downsampleMinMax(pressureData, maxPoints));
-                    // Only fetch air-quality datasets if it's an Air device
-                    if (selectedDevice.isAir) {
-                        pm25Data = db.getSensorData(selectedDevice.deviceAddress, "pm25", startTime, endTime)
-                        co2Data  = db.getSensorData(selectedDevice.deviceAddress, "co2",  startTime, endTime)
-                        vocData  = db.getSensorData(selectedDevice.deviceAddress, "voc",  startTime, endTime)
-                        noxData  = db.getSensorData(selectedDevice.deviceAddress, "nox",  startTime, endTime)
-                        iaqsData = db.calculateIAQSList(pm25Data, co2Data)
-                        pm25Graph.setPoints(downsampleMinMax(pm25Data, maxPoints))
-                        co2Graph.setPoints(downsampleMinMax(co2Data, maxPoints))
-                        vocGraph.setPoints(downsampleMinMax(vocData, maxPoints))
-                        noxGraph.setPoints(downsampleMinMax(noxData, maxPoints))
-                        iaqsGraph.setPoints(downsampleMinMax(iaqsData, maxPoints))
-                    }
+                    maxPoints = tempGraph.width
+                    plotting = true
+                    db.requestPlotData(selectedDevice.deviceAddress, selectedDevice.isAir, startTime, endTime, maxPoints)
                 }
             }
-         }
+        }
 
         Column {
             // Put everything inside column, so the flickable
@@ -554,26 +441,9 @@ Page {
             }
 
             Component.onCompleted: {
-                maxPoints = tempGraph.width;
-                tempData = db.getSensorData(selectedDevice.deviceAddress, "temperature", startTime, endTime);
-                tempGraph.setPoints(downsampleMinMax(tempData, maxPoints));
-                humidityData = db.getSensorData(selectedDevice.deviceAddress, "humidity", startTime, endTime);
-                humidityGraph.setPoints(downsampleMinMax(humidityData, maxPoints));
-                pressureData = db.getSensorData(selectedDevice.deviceAddress, "air_pressure", startTime, endTime);
-                pressureGraph.setPoints(downsampleMinMax(pressureData, maxPoints));
-                // Only fetch air-quality datasets if it's an Air device
-                if (selectedDevice.isAir) {
-                    pm25Data = db.getSensorData(selectedDevice.deviceAddress, "pm25", startTime, endTime)
-                    co2Data  = db.getSensorData(selectedDevice.deviceAddress, "co2",  startTime, endTime)
-                    vocData  = db.getSensorData(selectedDevice.deviceAddress, "voc",  startTime, endTime)
-                    noxData  = db.getSensorData(selectedDevice.deviceAddress, "nox",  startTime, endTime)
-                    iaqsData = db.calculateIAQSList(pm25Data, co2Data)
-                    pm25Graph.setPoints(downsampleMinMax(pm25Data, maxPoints))
-                    co2Graph.setPoints(downsampleMinMax(co2Data, maxPoints))
-                    vocGraph.setPoints(downsampleMinMax(vocData, maxPoints))
-                    noxGraph.setPoints(downsampleMinMax(noxData, maxPoints))
-                    iaqsGraph.setPoints(downsampleMinMax(iaqsData, maxPoints))
-                }
+                maxPoints = tempGraph.width
+                plotting = true
+                db.requestPlotData(selectedDevice.deviceAddress, selectedDevice.isAir, startTime, endTime, maxPoints)
             }
 
             SectionHeader {
@@ -658,17 +528,61 @@ Page {
                 // Lines are not shown when app is background
                 // redraw the graphs when the page is visible again
                 maxPoints = tempGraph.width;
-                tempGraph.setPoints(downsampleMinMax(tempData, maxPoints));
-                humidityGraph.setPoints(downsampleMinMax(humidityData, maxPoints));
-                pressureGraph.setPoints(downsampleMinMax(pressureData, maxPoints));
+                tempGraph.setPoints(tempPlotData)
+                humidityGraph.setPoints(humidityPlotData)
+                pressureGraph.setPoints(pressurePlotData)
                 if (selectedDevice.isAir) {
-                    pm25Graph.setPoints(downsampleMinMax(pm25Data, maxPoints))
-                    co2Graph.setPoints(downsampleMinMax(co2Data, maxPoints))
-                    vocGraph.setPoints(downsampleMinMax(vocData, maxPoints))
-                    noxGraph.setPoints(downsampleMinMax(noxData, maxPoints))
-                    iaqsGraph.setPoints(downsampleMinMax(iaqsData, maxPoints))
+                    pm25Graph.setPoints(pm25PlotData)
+                    co2Graph.setPoints(co2PlotData)
+                    vocGraph.setPoints(vocPlotData)
+                    noxGraph.setPoints(noxPlotData)
+                    iaqsGraph.setPoints(iaqsPlotData)
                 }
             }
+        }
+    }
+    BusyLabel {
+        id: plotLoading
+        running: plotting
+        text: "Plotting data..."
+        anchors.centerIn: parent
+        visible: plotting
+    }
+
+    Connections {
+        target: db
+        onPlotDataReady: {
+            // Raw for "tap graph → full data"
+            tempData = result["temperature_raw"]
+            humidityData = result["humidity_raw"]
+            pressureData = result["air_pressure_raw"]
+            // Downsampled for display
+            tempPlotData = result["temperature_ds"]
+            humidityPlotData = result["humidity_ds"]
+            pressurePlotData = result["air_pressure_ds"]
+            aggregated = result["aggregated"]
+            bucketDuration = result["bucketDuration"]
+            tempGraph.setPoints(tempPlotData)
+            humidityGraph.setPoints(humidityPlotData)
+            pressureGraph.setPoints(pressurePlotData)
+            if (selectedDevice.isAir) {
+                pm25Data = result["pm25_raw"]
+                co2Data  = result["co2_raw"]
+                vocData  = result["voc_raw"]
+                noxData  = result["nox_raw"]
+                iaqsData = result["iaqs_raw"]
+                pm25PlotData = result["pm25_ds"]
+                co2PlotData  = result["co2_ds"]
+                vocPlotData  = result["voc_ds"]
+                noxPlotData  = result["nox_ds"]
+                iaqsPlotData = result["iaqs_ds"]
+                pm25Graph.setPoints(pm25PlotData)
+                co2Graph.setPoints(co2PlotData)
+                vocGraph.setPoints(vocPlotData)
+                noxGraph.setPoints(noxPlotData)
+                iaqsGraph.setPoints(iaqsPlotData)
+            }
+            plotting = false
         }
     }
 }

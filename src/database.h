@@ -42,6 +42,7 @@ public:
     Q_INVOKABLE QString exportCSV(const QString deviceAddress, const QString deviceName, int startTime, int endTime);
     Q_INVOKABLE void setLastSync(const QString& deviceAddress, const QString& deviceName, int timestamp);
     Q_INVOKABLE QVariantList calculateIAQSList(const QVariantList &pm25Data, const QVariantList &co2Data);
+    Q_INVOKABLE void requestPlotData(QString deviceAddress, bool isAir, int startTime, int endTime, int maxPoints);
 
 private:
     QSqlDatabase db;
@@ -55,6 +56,7 @@ private:
 signals:
     void inputFinished();
     void inputProgress(int step);
+    void plotDataReady(QVariantMap result);
     void deviceDataUpdated(
         const QString &mac, double temperature, double humidity, double pressure, double accX, double accY, double accZ,
         double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);

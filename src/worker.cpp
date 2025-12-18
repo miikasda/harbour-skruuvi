@@ -21,6 +21,10 @@
 worker::worker(database* db, QString deviceAddress, QString deviceName, const QVariantList& data)
     : db(db), deviceAddress(deviceAddress), deviceName(deviceName), data(data) {}
 
+worker::worker(database* db, const QString& deviceAddress, bool isAir, int startTime, int endTime, int maxPoints)
+    : QObject(nullptr), db(db), deviceAddress(deviceAddress), plotIsAir(isAir),
+      plotStartTime(startTime), plotEndTime(endTime), plotMaxPoints(maxPoints) {}
+
 void worker::inputRawData() {
     // Define sensor values
     constexpr int TEMPERATURE = 0x30;
@@ -162,4 +166,155 @@ void worker::inputRawData() {
 
     // Emit the inputFinished signal to indicate that the operation is completed
     emit inputFinished();
+}
+
+bool worker::tryParsePointMap(const QVariant& v, worker::DsPoint& out) {
+    if (v.type() != QVariant::Map) return false;
+    const QVariantMap m = v.toMap();
+    if (!m.contains("x") || !m.contains("y")) return false;
+    out.x = m.value("x").toDouble();
+    out.y = m.value("y").toDouble();
+    return true;
+}
+
+QVariant worker::makePointVariant(const worker::DsPoint& p) {
+    QVariantMap m;
+    m["x"] = p.x;
+    m["y"] = p.y;
+    return m;
+}
+
+void worker::flushBucketToOutput(const QVector<worker::DsPoint>& bucket, QVariantList& out) {
+    if (bucket.isEmpty()) return;
+
+    worker::DsPoint minP = bucket[0];
+    worker::DsPoint maxP = bucket[0];
+
+    for (int i = 1; i < bucket.size(); ++i) {
+        if (bucket[i].y < minP.y) minP = bucket[i];
+        if (bucket[i].y > maxP.y) maxP = bucket[i];
+    }
+
+    if (minP.x == maxP.x && minP.y == maxP.y) {
+        out.append(makePointVariant(minP));
+    } else if (minP.x < maxP.x) {
+        out.append(makePointVariant(minP));
+        out.append(makePointVariant(maxP));
+    } else {
+        out.append(makePointVariant(maxP));
+        out.append(makePointVariant(minP));
+    }
+}
+
+QVariantList worker::downsampleMinMax(const QVariantList& pointsIn, int maxPoints, bool* aggregatedOut, double* bucketDurationOut) {
+    if (aggregatedOut) *aggregatedOut = false;
+    if (bucketDurationOut) *bucketDurationOut = 0.0;
+
+    if (pointsIn.isEmpty() || maxPoints <= 0) {
+        return QVariantList();
+    }
+
+    // Parse into numeric list (skip malformed)
+    QVector<DsPoint> points;
+    points.reserve(pointsIn.size());
+    for (const QVariant& v : pointsIn) {
+        DsPoint p;
+        if (tryParsePointMap(v, p)) points.push_back(p);
+    }
+    if (points.isEmpty()) return QVariantList();
+
+    // Same rule as QML: if <= 2*maxPoints, no downsampling
+    if (points.size() <= 2 * maxPoints) {
+        return pointsIn;
+    }
+
+    // Compute total time range
+    const double startX = points.front().x;
+    const double endX   = points.back().x;
+    const double range  = endX - startX;
+    if (range <= 0.0) {
+        return pointsIn;
+    }
+
+    const double bucketDuration = range / double(maxPoints);
+    if (bucketDurationOut) *bucketDurationOut = bucketDuration;
+
+    QVariantList out;
+    out.reserve(2 * maxPoints);
+
+    // Current bucket [bucketStart, bucketEnd]
+    double bucketStart = startX;
+    double bucketEnd   = bucketStart + bucketDuration;
+    QVector<DsPoint> bucket;
+    bucket.reserve(64);
+
+    for (int i = 0; i < points.size(); ++i) {
+        const DsPoint& p = points[i];
+
+        if (p.x <= bucketEnd) {
+            bucket.push_back(p);
+        } else {
+            // Finish current bucket
+            flushBucketToOutput(bucket, out);
+
+            // Start next bucket
+            bucket.clear();
+            bucket.push_back(p);
+
+            bucketStart = bucketEnd;
+            bucketEnd   = bucketStart + bucketDuration;
+        }
+    }
+
+    // Flush last bucket
+    flushBucketToOutput(bucket, out);
+    if (aggregatedOut) *aggregatedOut = true;
+    return out;
+}
+
+void worker::plotData() {
+    QVariantMap result;
+    const int maxPts = (plotMaxPoints > 0) ? plotMaxPoints : 500;
+
+    // Fetch data
+    QVariantList tempRaw = db->getSensorData(deviceAddress, "temperature",  plotStartTime, plotEndTime);
+    QVariantList humRaw  = db->getSensorData(deviceAddress, "humidity",     plotStartTime, plotEndTime);
+    QVariantList presRaw = db->getSensorData(deviceAddress, "air_pressure", plotStartTime, plotEndTime);
+
+    // Downsample
+    bool aggregated = false;
+    double bucketDuration = 0.0;
+
+    QVariantList tempDs = downsampleMinMax(tempRaw, maxPts, &aggregated, &bucketDuration);
+    QVariantList humDs  = downsampleMinMax(humRaw,  maxPts, nullptr, nullptr);
+    QVariantList presDs = downsampleMinMax(presRaw, maxPts, nullptr, nullptr);
+
+    //Return BOTH
+    result["temperature_raw"] = tempRaw;
+    result["humidity_raw"] = humRaw;
+    result["air_pressure_raw"] = presRaw;
+    result["temperature_ds"] = tempDs;
+    result["humidity_ds"] = humDs;
+    result["air_pressure_ds"] = presDs;
+    result["aggregated"] = aggregated;
+    result["bucketDuration"] = bucketDuration;
+
+    if (plotIsAir) {
+        QVariantList pm25Raw = db->getSensorData(deviceAddress, "pm25", plotStartTime, plotEndTime);
+        QVariantList co2Raw  = db->getSensorData(deviceAddress, "co2",  plotStartTime, plotEndTime);
+        QVariantList vocRaw  = db->getSensorData(deviceAddress, "voc",  plotStartTime, plotEndTime);
+        QVariantList noxRaw  = db->getSensorData(deviceAddress, "nox",  plotStartTime, plotEndTime);
+        QVariantList iaqsRaw = db->calculateIAQSList(pm25Raw, co2Raw);
+        result["pm25_raw"] = pm25Raw;
+        result["co2_raw"]  = co2Raw;
+        result["voc_raw"]  = vocRaw;
+        result["nox_raw"]  = noxRaw;
+        result["iaqs_raw"] = iaqsRaw;
+        result["pm25_ds"] = downsampleMinMax(pm25Raw, maxPts);
+        result["co2_ds"]  = downsampleMinMax(co2Raw,  maxPts);
+        result["voc_ds"]  = downsampleMinMax(vocRaw,  maxPts);
+        result["nox_ds"]  = downsampleMinMax(noxRaw,  maxPts);
+        result["iaqs_ds"] = downsampleMinMax(iaqsRaw, maxPts);
+    }
+    emit plotReady(result);
 }
