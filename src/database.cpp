@@ -22,6 +22,7 @@
 #include <QThread>
 #include <QFile>
 #include <QTextStream>
+#include <cmath>
 
 
 database::database(QObject* parent) : QObject(parent) {
@@ -76,6 +77,26 @@ database::database(QObject* parent) : QObject(parent) {
                                           "PRIMARY KEY (device, timestamp),"
                                           "FOREIGN KEY (device) REFERENCES devices(mac))";
     executeQuery(createAirPressureTableQuery);
+    executeQuery("CREATE TABLE IF NOT EXISTS pm25 ("
+                "device TEXT REFERENCES devices(mac),"
+                "timestamp INT,"
+                "value REAL,"
+                "PRIMARY KEY (device, timestamp))");
+    executeQuery("CREATE TABLE IF NOT EXISTS co2 ("
+                "device TEXT REFERENCES devices(mac),"
+                "timestamp INT,"
+                "value INT,"
+                "PRIMARY KEY (device, timestamp))");
+    executeQuery("CREATE TABLE IF NOT EXISTS voc ("
+                "device TEXT REFERENCES devices(mac),"
+                "timestamp INT,"
+                "value INT,"
+                "PRIMARY KEY (device, timestamp))");
+    executeQuery("CREATE TABLE IF NOT EXISTS nox ("
+                "device TEXT REFERENCES devices(mac),"
+                "timestamp INT,"
+                "value INT,"
+                "PRIMARY KEY (device, timestamp))");
 
     // Colums added after initial release needs to be appended
     checkAndAddColumn("devices", "voltage", "REAL");
@@ -90,10 +111,44 @@ database::database(QObject* parent) : QObject(parent) {
     checkAndAddColumn("devices", "acc_z", "REAL");
     checkAndAddColumn("devices", "last_obs", "int");
     checkAndAddColumn("devices", "meas_seq", "int");
+    checkAndAddColumn("devices", "pm25", "REAL");
+    checkAndAddColumn("devices", "co2", "INT");
+    checkAndAddColumn("devices", "voc", "INT");
+    checkAndAddColumn("devices", "nox", "INT");
+    checkAndAddColumn("devices", "calibrating", "INT");
+}
+
+QSqlDatabase database::connectionForCurrentThread()
+{
+    // If we're in the same thread as the database object, use the existing connection.
+    if (QThread::currentThread() == this->thread()) {
+        return db;
+    }
+
+    // Otherwise create/use a per-thread connection (same file).
+    const QString connName =
+        QStringLiteral("skruuvi-%1").arg(reinterpret_cast<quintptr>(QThread::currentThreadId()));
+
+    if (QSqlDatabase::contains(connName)) {
+        return QSqlDatabase::database(connName);
+    }
+
+    QSqlDatabase d = QSqlDatabase::addDatabase("QSQLITE", connName);
+    d.setDatabaseName(db.databaseName());
+    if (!d.open()) {
+        qWarning() << "DB open failed:" << d.lastError();
+    }
+    return d;
 }
 
 void database::executeQuery(const QString& queryStr) {
-    QSqlQuery query(db);
+    QSqlDatabase d = connectionForCurrentThread();
+    if (!d.isOpen()) {
+        qDebug() << "DB not open:" << d.lastError();
+        return;
+    }
+
+    QSqlQuery query(d);
     if (!query.exec(queryStr)) {
         qDebug() << "Error executing query:" << query.lastError().text();
     }
@@ -123,8 +178,8 @@ void database::addDevice(const QString &deviceAddress, const QString &deviceName
     executeQuery(createDeviceQuery);
 }
 
-void database::updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX, 
-    double accY, double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp)
+void database::updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX, double accY,
+                            double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp)
 {
     QSqlQuery query(db);
     query.prepare(
@@ -162,6 +217,124 @@ void database::updateDevice(const QString &mac, double temperature, double humid
     }
 }
 
+double database::calculateIAQS(double pm25, double co2){
+    // Documentation: https://docs.ruuvi.com/ruuvi-air-firmware/ruuvi-indoor-air-quality-score-iaqs
+
+    // Return NaN if inputs are invalid
+    if (!std::isfinite(pm25) || !std::isfinite(co2)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    if (pm25 < 0 || co2 < 1) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    // Constants (from Ruuvi IAQS reference implementation)
+    const double AQI_MAX = 100.0;
+    const double PM25_MIN   = 0.0;
+    const double PM25_MAX   = 60.0;
+    const double PM25_SCALE = AQI_MAX / (PM25_MAX - PM25_MIN); // ~1.6667
+    const double CO2_MIN    = 420.0;
+    const double CO2_MAX    = 2300.0;
+    const double CO2_SCALE  = AQI_MAX / (CO2_MAX - CO2_MIN);   // ~0.05319
+
+    // Clamp helper
+    auto clamp = [](double v, double lo, double hi) {
+        return std::min(std::max(v, lo), hi);
+    };
+
+    // Clamp values to valid input range
+    pm25 = clamp(pm25, PM25_MIN, PM25_MAX);
+    co2  = clamp(co2,  CO2_MIN,  CO2_MAX);
+
+    // Convert into normalized distances
+    double dx = (pm25 - PM25_MIN) * PM25_SCALE;  // 0..100
+    double dy = (co2  - CO2_MIN)  * CO2_SCALE;   // 0..100
+
+    // Hypotenuse = combined pollution index
+    double r = std::hypot(dx, dy);
+
+    // IAQS is 100 - distance
+    double iaqs = AQI_MAX - r;
+
+    // Clamp 0–100
+    iaqs = clamp(iaqs, 0.0, AQI_MAX);
+
+    // Ruuvi specification: round to nearest integer
+    return std::round(iaqs);
+}
+
+QVariantList database::calculateIAQSList(const QVariantList &pm25Data,
+                                         const QVariantList &co2Data)
+{
+    // Matches timestamps on pm25 and co2 data, and calculates IAQS based on the matched timestamps
+    QVariantList result;
+
+    int i = 0, j = 0;
+    while (i < pm25Data.size() && j < co2Data.size()) {
+        const QVariantMap p = pm25Data[i].toMap();
+        const QVariantMap c = co2Data[j].toMap();
+
+        int t1 = p["x"].toInt();
+        int t2 = c["x"].toInt();
+
+        if (t1 == t2) {
+            double pm25 = p["y"].toDouble();
+            double co2  = c["y"].toDouble();
+
+            int iaqs = calculateIAQS(pm25, co2);
+
+            QVariantMap v;
+            v["x"] = t1;
+            v["y"] = iaqs >= 0 ? iaqs : QVariant(); // null if invalid
+            result.append(v);
+
+            ++i; ++j;
+        }
+        else if (t1 < t2) {
+            ++i;
+        }
+        else {
+            ++j;
+        }
+    }
+    return result;
+}
+
+void database::updateRuuviAir(const QString &mac, double temperature, double humidity, double pressure, double pm25,
+                              int co2, int voc, int nox, int calibrating, int sequence, int timestamp)
+{
+    QSqlQuery query(db);
+    query.prepare(
+        "UPDATE devices SET "
+        "temperature = :temperature, "
+        "humidity = :humidity, "
+        "pressure = :pressure, "
+        "pm25 = :pm25, "
+        "co2 = :co2, "
+        "voc = :voc, "
+        "nox = :nox, "
+        "calibrating = :calibrating, "
+        "meas_seq = :sequence, "
+        "last_obs = :timestamp "
+        "WHERE mac = :mac"
+    );
+
+    query.bindValue(":temperature", temperature);
+    query.bindValue(":humidity", humidity);
+    query.bindValue(":pressure", pressure);
+    query.bindValue(":pm25", pm25);
+    query.bindValue(":co2", co2);
+    query.bindValue(":voc", voc);
+    query.bindValue(":nox", nox);
+    query.bindValue(":calibrating", calibrating);
+    query.bindValue(":sequence", sequence);
+    query.bindValue(":timestamp", timestamp);
+    query.bindValue(":mac", mac);
+
+    if (!query.exec())
+        qWarning() << "Error updating Ruuvi Air device data:" << query.lastError().text();
+}
+
 void database::setLastSync(const QString& deviceAddress, const QString& deviceName, int timestamp) {
     addDevice(deviceAddress, deviceName);
     QString updateQuery = "UPDATE devices SET sync_time = " + QString::number(timestamp) +
@@ -179,65 +352,161 @@ void database::inputRawData(QString deviceAddress, QString deviceName, const QVa
     connect(thread, &QThread::started, workerObj, &worker::inputRawData);
     connect(workerObj, &worker::inputFinished, this, &database::inputFinished);
     connect(workerObj, &worker::inputFinished, thread, &QThread::quit);
+    connect(workerObj, &worker::inputProgress, this, &database::inputProgress);
     // Start the thread
     thread->start();
 }
 
-void database::inputManufacturerData(const std::array<uint8_t, 24> &manufacturerData) {
-    // Documentation for data parsing is at https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2
-
-    // Parse data
+void database::inputManufacturerData(const QString &deviceAddress, const std::array<uint8_t, 24> &manufacturerData) {
     int dataFormat = manufacturerData[0];
-    if (dataFormat != 5) {
-        qDebug() << "Unknown data format: " << dataFormat;
-        return;
-    }
-    int16_t temperatureData = (manufacturerData[1] << 8) | manufacturerData[2];
-    float temperature = static_cast<float>(temperatureData) * 0.005;
-    uint16_t humidityData = (manufacturerData[3] << 8) | manufacturerData[4];
-    float humidity = static_cast<float>(humidityData) * 0.0025;
-    uint16_t pressureData = (manufacturerData[5] << 8) | manufacturerData[6];
-    float pressure = (static_cast<int>(pressureData) + 50000) / 100.0;
-    int16_t accDataX = (manufacturerData[7] << 8) | manufacturerData[8];
-    float accX = static_cast<float>(accDataX) / 1000;
-    int16_t accDataY = (manufacturerData[9] << 8) | manufacturerData[10];
-    float accY = static_cast<float>(accDataY) / 1000;
-    int16_t accDataZ = (manufacturerData[11] << 8) | manufacturerData[12];
-    float accZ = static_cast<float>(accDataZ) / 1000;
-    uint16_t BatteryAndTxData = (manufacturerData[13] << 8) | manufacturerData[14];
-    int txPower = ((BatteryAndTxData & 0x1F) * 2) - 40;
-    float battery = (static_cast<float>(BatteryAndTxData >> 5) / 1000) + 1.6;
-    int movementCounter = manufacturerData[15];
-    int measurementSequenceNumber = (manufacturerData[16] << 8) | manufacturerData[17];
-    char macAddress[18];
-    sprintf(macAddress, "%02X:%02X:%02X:%02X:%02X:%02X",
-            manufacturerData[18], manufacturerData[19], manufacturerData[20], manufacturerData[21], manufacturerData[22], manufacturerData[23]);
-
-    // Update the device database with updateDevice
     int timestamp = QDateTime::currentDateTime().toTime_t();
-    updateDevice(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
- 
-    // Send to database
-    insertSensorData(macAddress, "temperature", {qMakePair(timestamp, temperature)});
-    if (humidityData != 0xFFFF) {
-        insertSensorData(macAddress, "humidity", {qMakePair(timestamp, humidity)});
-    }
-    if (pressureData != 0xFFFF) {
-        insertSensorData(macAddress, "air_pressure", {qMakePair(timestamp, pressure)});
-    }
+    if (dataFormat == 5) {
+        // Documentation for DF5 is at https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2
+        int16_t temperatureData = (manufacturerData[1] << 8) | manufacturerData[2];
+        float temperature = static_cast<float>(temperatureData) * 0.005;
+        uint16_t humidityData = (manufacturerData[3] << 8) | manufacturerData[4];
+        float humidity = static_cast<float>(humidityData) * 0.0025;
+        uint16_t pressureData = (manufacturerData[5] << 8) | manufacturerData[6];
+        float pressure = (static_cast<int>(pressureData) + 50000) / 100.0;
+        int16_t accDataX = (manufacturerData[7] << 8) | manufacturerData[8];
+        float accX = static_cast<float>(accDataX) / 1000;
+        int16_t accDataY = (manufacturerData[9] << 8) | manufacturerData[10];
+        float accY = static_cast<float>(accDataY) / 1000;
+        int16_t accDataZ = (manufacturerData[11] << 8) | manufacturerData[12];
+        float accZ = static_cast<float>(accDataZ) / 1000;
+        uint16_t BatteryAndTxData = (manufacturerData[13] << 8) | manufacturerData[14];
+        int txPower = ((BatteryAndTxData & 0x1F) * 2) - 40;
+        float battery = (static_cast<float>(BatteryAndTxData >> 5) / 1000) + 1.6;
+        int movementCounter = manufacturerData[15];
+        int measurementSequenceNumber = (manufacturerData[16] << 8) | manufacturerData[17];
+        char macAddress[18];
+        sprintf(macAddress, "%02X:%02X:%02X:%02X:%02X:%02X",
+                manufacturerData[18], manufacturerData[19], manufacturerData[20], manufacturerData[21], manufacturerData[22], manufacturerData[23]);
 
-    // Emit signal with new readings
-    emit deviceDataUpdated(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
+        // Update the device database with updateDevice
+        updateDevice(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
+
+        // Send to database
+        insertSensorData(macAddress, "temperature", {qMakePair(timestamp, temperature)});
+        if (humidityData != 0xFFFF) {
+            insertSensorData(macAddress, "humidity", {qMakePair(timestamp, humidity)});
+        }
+        if (pressureData != 0xFFFF) {
+            insertSensorData(macAddress, "air_pressure", {qMakePair(timestamp, pressure)});
+        }
+
+        // Emit signal with new readings
+        emit deviceDataUpdated(macAddress, temperature, humidity, pressure, accX, accY, accZ, battery, txPower, movementCounter, measurementSequenceNumber, timestamp);
+    }
+    else if (dataFormat == 6) {
+        // Documentation for DF6 is at https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-6
+        qDebug() << "[DF6] From" << deviceAddress;
+        qDebug() << "Raw (first 20 bytes):"
+         << QByteArray(reinterpret_cast<const char*>(manufacturerData.data()), 20).toHex();
+
+        // Parse values according to DF6 specification
+        int16_t tRaw  = (manufacturerData[1] << 8) | manufacturerData[2];
+        uint16_t hRaw  = (manufacturerData[3] << 8) | manufacturerData[4];
+        uint16_t pRaw  = (manufacturerData[5] << 8) | manufacturerData[6];
+        uint16_t pmRaw = (manufacturerData[7] << 8) | manufacturerData[8];
+        uint16_t co2Raw = (manufacturerData[9] << 8) | manufacturerData[10];
+        uint8_t vocHi  = manufacturerData[11];
+        uint8_t noxHi  = manufacturerData[12];
+        uint8_t sequence = manufacturerData[15];
+        uint8_t flags = manufacturerData[16];
+        float temperature = tRaw * 0.005f;
+        float humidity    = hRaw * 0.0025f;
+        float pressure    = (pRaw + 50000) / 100.0f;    // hPa
+        float pm25        = pmRaw / 10.0f;              // µg/m³
+        int co2         = co2Raw;                     // ppm
+        int voc = (vocHi << 1) | ((flags >> 6) & 1);
+        int nox = (noxHi << 1) | ((flags >> 7) & 1);
+        bool calibrationInProgress = (flags & 0x01);
+
+        // Update device db
+        updateRuuviAir(deviceAddress, temperature, humidity, pressure, pm25, co2, voc, nox, calibrationInProgress, sequence, timestamp);
+
+        // Send to database
+        if (tRaw != 0x7FFF) {
+            insertSensorData(deviceAddress, "temperature", {{timestamp, temperature}});
+        }
+        if (hRaw != 0xFFFF) {
+            insertSensorData(deviceAddress, "humidity", {{timestamp, humidity}});
+        }
+        if (pRaw != 0xFFFF) {
+            insertSensorData(deviceAddress, "air_pressure", {{timestamp, pressure}});
+        }
+        if (pmRaw != 0xFFFF) {
+            insertSensorData(deviceAddress, "pm25", {{timestamp, pm25}});
+        }
+        if (co2Raw != 0xFFFF) {
+            insertSensorData(deviceAddress, "co2", {{timestamp, double(co2)}});
+        }
+        if (voc != 0x1FF) {
+            insertSensorData(deviceAddress, "voc", {{timestamp, double(voc)}});
+        }
+        if (nox != 0x1FF) {
+            insertSensorData(deviceAddress, "nox", {{timestamp, double(nox)}});
+        }
+
+        // Calculate IAQS
+        double iaqs = calculateIAQS(pm25, co2);
+
+        // Emit signal with new readings
+        emit airDeviceDataUpdated(deviceAddress, temperature, humidity, pressure, pm25, co2, voc, nox, iaqs, calibrationInProgress, sequence, timestamp);
+    }
+    else {
+        qDebug() << "Unknown data format:" << dataFormat;
+    }
 }
 
-void database::insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData) {
-    // Loop over the sensor data and insert into the table
-    for (const QPair<int, double>& item : sensorData) {
-        int timestamp = item.first;
-        double value = item.second;
-        QString insertQuery = "INSERT OR IGNORE INTO " + sensor + " (device, timestamp, value) "
-                              "VALUES ('" + deviceAddress + "', " + QString::number(timestamp) + ", " + QString::number(value) + ")";
-        executeQuery(insertQuery);
+void database::insertSensorData(const QString &deviceAddress, const QString &sensor,
+                                const QList<QPair<int, double>> &sensorData)
+{
+    if (sensorData.isEmpty()) return;
+
+    QSqlDatabase d = connectionForCurrentThread();
+    if (!d.isOpen()) {
+        qDebug() << "DB not open:" << d.lastError();
+        return;
+    }
+
+    if (!d.transaction()) {
+        qWarning() << "Transaction start failed:" << d.lastError();
+        return;
+    }
+
+    QSqlQuery q(d);
+    if (!q.prepare("INSERT OR IGNORE INTO " + sensor + " (device, timestamp, value) VALUES (?, ?, ?)")) {
+        qWarning() << "Prepare failed:" << q.lastError();
+        d.rollback();
+        return;
+    }
+
+    QVariantList devices, timestamps, values;
+    devices.reserve(sensorData.size());
+    timestamps.reserve(sensorData.size());
+    values.reserve(sensorData.size());
+
+    for (const auto& item : sensorData) {
+        devices    << deviceAddress;
+        timestamps << item.first;
+        values     << item.second;
+    }
+
+    q.addBindValue(devices);
+    q.addBindValue(timestamps);
+    q.addBindValue(values);
+
+    if (!q.execBatch()) {
+        qWarning() << "execBatch failed:" << q.lastError();
+        d.rollback();
+        return;
+    }
+
+    if (!d.commit()) {
+        qWarning() << "Commit failed:" << d.lastError();
+        d.rollback();
     }
 }
 
@@ -287,6 +556,17 @@ QVariantList database::getDevices()
             QString acc_z = query.value("acc_z").isNull() ? "NA" : QString::number(query.value("acc_z").toDouble());
             QString last_obs = query.value("last_obs").isNull() ? "NA" : QString::number(query.value("last_obs").toInt());
             QString meas_seq = query.value("meas_seq").isNull() ? "NA" : QString::number(query.value("meas_seq").toInt());
+            QString pm25 = query.value("pm25").isNull() ? "NA" : QString::number(query.value("pm25").toDouble());
+            QString co2 = query.value("co2").isNull() ? "NA" : QString::number(query.value("co2").toInt());
+            QString voc = query.value("voc").isNull() ? "NA" : QString::number(query.value("voc").toInt());
+            QString nox = query.value("nox").isNull() ? "NA" : QString::number(query.value("nox").toInt());
+            QString calibrating = query.value("calibrating").isNull() ? "NA" : QString::number(query.value("calibrating").toInt());
+            QString iaqs = "NA";
+            if (!query.value("pm25").isNull() && !query.value("co2").isNull()) {
+                iaqs = QString::number(
+                    calculateIAQS(query.value("pm25").toDouble(), query.value("co2").toDouble())
+                );
+            }
 
             // TODO Remove the device prefix...
             QVariantMap device;
@@ -303,7 +583,12 @@ QVariantList database::getDevices()
             device["accZ"] = acc_z;
             device["last_obs"] = last_obs;
             device["meas_seq"] = meas_seq;
-
+            device["pm25"] = pm25;
+            device["co2"] = co2;
+            device["voc"] = voc;
+            device["nox"] = nox;
+            device["calibrating"] = calibrating;
+            device["iaqs"] = iaqs;
             devices.append(device);
         }
     } else {
@@ -386,6 +671,12 @@ void database::removeDevice(const QString deviceAddress) {
     QString deleteAirPressureQuery = "DELETE FROM air_pressure WHERE device = '" + deviceAddress + "'";
     executeQuery(deleteAirPressureQuery);
 
+    // Remove from RuuviAir related tables
+    executeQuery("DELETE FROM pm25 WHERE device = '" + deviceAddress + "'");
+    executeQuery("DELETE FROM co2 WHERE device = '" + deviceAddress + "'");
+    executeQuery("DELETE FROM voc WHERE device = '" + deviceAddress + "'");
+    executeQuery("DELETE FROM nox WHERE device = '" + deviceAddress + "'");
+
     // Remove device from devices table
     QString deleteDeviceQuery = "DELETE FROM devices WHERE mac = '" + deviceAddress + "'";
     executeQuery(deleteDeviceQuery);
@@ -418,7 +709,8 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
     QTextStream stream(&file);
 
     // Get all measurements from db
-    QString selectQuery = "SELECT t.timestamp, temperature.value AS temperature, humidity.value AS humidity, air_pressure.value AS air_pressure"
+    QString selectQuery = "SELECT t.timestamp, temperature.value AS temperature, humidity.value AS humidity, air_pressure.value AS air_pressure,"
+                          " pm25.value AS pm25, co2.value AS co2, voc.value AS voc, nox.value AS nox"
                           " FROM ("
                           "     SELECT DISTINCT timestamp FROM temperature WHERE device = '" + deviceAddress + "' AND timestamp >= " + QString::number(startTime) +
                           "     AND timestamp <= " + QString::number(endTime) +
@@ -428,15 +720,31 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
                           "     UNION"
                           "     SELECT DISTINCT timestamp FROM air_pressure WHERE device = '" + deviceAddress + "' AND timestamp >= " + QString::number(startTime) +
                           "     AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM pm25 WHERE device = '" + deviceAddress + "'"
+                          "         AND timestamp >= " + QString::number(startTime) + " AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM co2 WHERE device = '" + deviceAddress + "'"
+                          "         AND timestamp >= " + QString::number(startTime) + " AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM voc WHERE device = '" + deviceAddress + "'"
+                          "         AND timestamp >= " + QString::number(startTime) + " AND timestamp <= " + QString::number(endTime) +
+                          "     UNION"
+                          "     SELECT DISTINCT timestamp FROM nox WHERE device = '" + deviceAddress + "'"
+                          "         AND timestamp >= " + QString::number(startTime) + " AND timestamp <= " + QString::number(endTime) +
                           " ) t"
                           " LEFT JOIN temperature ON t.timestamp = temperature.timestamp AND temperature.device = '" + deviceAddress + "'"
                           " LEFT JOIN humidity ON t.timestamp = humidity.timestamp AND humidity.device = '" + deviceAddress + "'"
                           " LEFT JOIN air_pressure ON t.timestamp = air_pressure.timestamp AND air_pressure.device = '" + deviceAddress + "'"
+                          " LEFT JOIN pm25 ON t.timestamp = pm25.timestamp AND pm25.device = '" + deviceAddress + "'"
+                          " LEFT JOIN co2 ON t.timestamp = co2.timestamp AND co2.device = '" + deviceAddress + "'"
+                          " LEFT JOIN voc ON t.timestamp = voc.timestamp AND voc.device = '" + deviceAddress + "'"
+                          " LEFT JOIN nox ON t.timestamp = nox.timestamp AND nox.device = '" + deviceAddress + "'"
                           " ORDER BY t.timestamp ASC";
     QSqlQuery query(db);
 
     // Write header to the CSV file
-    stream << "mac,name,timestamp,temperature,humidity,air_pressure\n";
+    stream << "mac,name,timestamp,temperature,humidity,air_pressure,pm25,co2,voc,nox,iaqs\n";
     // Loop through the query results
     if (query.exec(selectQuery)) {
         while (query.next()) {
@@ -444,8 +752,20 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
             QString temperature = query.value(1).isNull() ? "-" : QString::number(query.value(1).toDouble());
             QString humidity = query.value(2).isNull() ? "-" : QString::number(query.value(2).toDouble());
             QString air_pressure = query.value(3).isNull() ? "-" : QString::number(query.value(3).toDouble());
+            QString pm25  = query.value(4).isNull() ? "-" : QString::number(query.value(4).toDouble());
+            QString co2   = query.value(5).isNull() ? "-" : QString::number(query.value(5).toDouble());
+            QString voc   = query.value(6).isNull() ? "-" : QString::number(query.value(6).toDouble());
+            QString nox   = query.value(7).isNull() ? "-" : QString::number(query.value(7).toDouble());
+            QString iaqs = "-";
+            if (!query.value(4).isNull() && !query.value(5).isNull()) {
+                iaqs = QString::number(
+                    calculateIAQS(query.value(4).toDouble(),
+                                query.value(5).toDouble())
+                );
+            }
             // Write the data to the CSV file
-            stream << deviceAddress << "," << deviceName << "," << timestamp << "," << temperature << "," << humidity << "," << air_pressure << "\n";
+            stream << deviceAddress << "," << deviceName << "," << timestamp << "," << temperature << "," << humidity << ","
+                   << air_pressure << "," << pm25 << "," << co2 << "," << voc << "," << nox << "," << iaqs << "\n";
         }
     } else {
         qDebug() << "Error executing sensor data query:" << query.lastError().text();
@@ -453,4 +773,20 @@ QString database::exportCSV(const QString deviceAddress, const QString deviceNam
 
     file.close();
     return csvPath;
+}
+
+void database::requestPlotData(QString deviceAddress, bool isAir, int startTime, int endTime, int maxPoints) {
+    QThread* thread = new QThread(this);
+
+    worker* workerObj = new worker(this, deviceAddress, isAir, startTime, endTime, maxPoints);
+    workerObj->moveToThread(thread);
+
+    connect(thread, &QThread::started, workerObj, &worker::plotData);
+    connect(workerObj, &worker::plotReady, this, &database::plotDataReady);
+
+    connect(workerObj, &worker::plotReady, thread, &QThread::quit);
+    connect(thread, &QThread::finished, workerObj, &QObject::deleteLater);
+    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+
+    thread->start();
 }

@@ -30,10 +30,10 @@ public:
     explicit database(QObject* parent = nullptr);
     void addDevice(const QString &deviceAddress, const QString &deviceName);
     Q_INVOKABLE void inputRawData(QString deviceAddress, QString deviceName, const QVariantList& data);
-    void inputManufacturerData(const std::array<uint8_t, 24> &manufacturerData);
+    void inputManufacturerData(const QString &deviceAddress, const std::array<uint8_t,24> &manufacturerData);
     Q_INVOKABLE QVariantList getSensorData(QString deviceAddress, QString sensor, int startTime, int endTime);
     void executeQuery(const QString& queryStr);
-    void insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData);
+    void insertSensorData(const QString &deviceAddress, const QString &sensor, const QList<QPair<int, double>> &sensorData);
     Q_INVOKABLE QVariantList getDevices();
     Q_INVOKABLE int getLastMeasurement(const QString deviceAddress, const QString sensor);
     Q_INVOKABLE int getLastSync(const QString deviceAddress);
@@ -41,18 +41,28 @@ public:
     Q_INVOKABLE void removeDevice(const QString deviceAddress);
     Q_INVOKABLE QString exportCSV(const QString deviceAddress, const QString deviceName, int startTime, int endTime);
     Q_INVOKABLE void setLastSync(const QString& deviceAddress, const QString& deviceName, int timestamp);
+    Q_INVOKABLE QVariantList calculateIAQSList(const QVariantList &pm25Data, const QVariantList &co2Data);
+    Q_INVOKABLE void requestPlotData(QString deviceAddress, bool isAir, int startTime, int endTime, int maxPoints);
 
 private:
     QSqlDatabase db;
     void checkAndAddColumn(const QString &tableName, const QString &columnName, const QString &columnType);
-    void updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX,
-        double accY, double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
+    void updateDevice(const QString &mac, double temperature, double humidity, double pressure, double accX, double accY,
+        double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
+    void updateRuuviAir(const QString &mac, double temperature, double humidity, double pressure,
+        double pm25, int co2, int voc, int nox, int calibrating, int sequence, int timestamp);
+    double calculateIAQS(double pm25, double co2);
+    QSqlDatabase connectionForCurrentThread();
 
 signals:
     void inputFinished();
+    void inputProgress(int step);
+    void plotDataReady(QVariantMap result);
     void deviceDataUpdated(
-        const QString &mac, double temperature, double humidity, double pressure, double accX, double accY,
-        double accZ, double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
+        const QString &mac, double temperature, double humidity, double pressure, double accX, double accY, double accZ,
+        double voltage, double txPower, int movementCounter, int measurementSequenceNumber, int timestamp);
+    void airDeviceDataUpdated(const QString &mac, double temperature, double humidity, double pressure, double pm25,
+                              int co2, int voc, int nox, double iaqs, int calibrating, int sequence, int timestamp);
 };
 
 #endif // DATABASE_H

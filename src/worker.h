@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -20,6 +20,8 @@
 
 #include <QObject>
 #include <QVariantList>
+#include <QVariantMap>
+#include <QVector>
 #include "database.h" // Include the database header file
 
 class worker : public QObject {
@@ -27,18 +29,32 @@ class worker : public QObject {
 
 public:
     worker(database* db, QString deviceAddress, QString deviceName, const QVariantList& data);
+    worker(database* db, const QString& deviceAddress, bool isAir, int startTime, int endTime, int maxPoints);
 
 public slots:
     void inputRawData();
+    void plotData();
 
 signals:
     void inputFinished();
+    void inputProgress(int step);
+    void plotReady(QVariantMap result);
 
 private:
     database* db; // Pointer to the database object
     QString deviceAddress;
     QString deviceName;
     QVariantList data;
+    bool plotIsAir = false;
+    int plotStartTime = 0;
+    int plotEndTime = 0;
+    int plotMaxPoints = 0;
+    struct DsPoint { double x; double y; };
+    static QVariantList downsampleMinMax(const QVariantList& pointsIn, int maxPoints,
+        bool* aggregatedOut = nullptr, double* bucketDurationOut = nullptr);
+    static void flushBucketToOutput(const QVector<DsPoint>& bucket, QVariantList& out);
+    static bool tryParsePointMap(const QVariant& v, DsPoint& out);
+    static QVariant makePointVariant(const DsPoint& p);
 };
 
 #endif // WORKER_H

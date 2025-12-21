@@ -29,6 +29,15 @@ Page {
         }
     }
 
+    function iaqsColor(iaqs) {
+        if (isNaN(iaqs)) return "transparent"
+        if (iaqs >= 90) return "#00c8c8"   // Turquoise
+        if (iaqs >= 80) return "#00a000"   // Green
+        if (iaqs >= 50) return "#ffd000"   // Yellow
+        if (iaqs >= 10) return "#ff8800"   // Orange
+        return "#ff0000"                // Red
+    }
+
     SilicaFlickable {
         anchors.fill: parent
 
@@ -127,6 +136,15 @@ Page {
                         accZ: Number(device.accZ).toFixed(2),
                         last_obs: device.last_obs,
                         meas_seq: device.meas_seq,
+                        pm25: Number(device.pm25).toFixed(2),
+                        co2: device.co2,
+                        voc: device.voc,
+                        nox: device.nox,
+                        iaqs: device.iaqs,
+                        // Convert calibration flag to UI text
+                        calibrating: (device.calibrating === "NA")
+                                        ? "NA"
+                                        : (device.calibrating == 1 ? "Yes" : "No"),
                         showBluetoothIcon: false
                     });
                 }
@@ -159,6 +177,7 @@ Page {
                 width: parent.width
                 property bool expanded: false
                 onClicked: expanded = !expanded
+                property bool isAir: model.co2 !== "NA"
 
                 Item {
                     width: parent.width
@@ -173,7 +192,7 @@ Page {
 
                     Image {
                         id: icon
-                        source: "images/ruuvi-tag-menu-v2.png"
+                        source: isAir ? "images/air-menu-new.png" : "images/ruuvi-tag-menu-v2.png"
                         width: Theme.iconSizeExtraLarge
                         fillMode: Image.PreserveAspectFit
 
@@ -196,6 +215,7 @@ Page {
                     }
 
                     Column {
+                        id: mainInfoCol
                         anchors.left: icon.right
                         anchors.leftMargin: Theme.paddingMedium
                         anchors.verticalCenter: parent.verticalCenter
@@ -258,6 +278,19 @@ Page {
                         }
                     }
 
+                    // IAQS to the right of main info col
+                    Label {
+                        visible: isAir && model.iaqs !== undefined && model.iaqs !== "NA"
+                        anchors {
+                            left: mainInfoCol.right
+                            leftMargin: 2 * Theme.paddingLarge
+                            verticalCenter: parent.verticalCenter
+                        }
+                        text: Number(model.iaqs).toFixed(0)
+                        font.pixelSize: Theme.fontSizeExtraLarge
+                        font.bold: true
+                        color: iaqsColor(Number(model.iaqs))
+                    }
 
                     // New column for latest readings
                     Column {
@@ -266,9 +299,9 @@ Page {
                         anchors.left: parent.left
                         anchors.leftMargin: leftMargin
                         anchors.topMargin: Theme.paddingSmall
-                        anchors.verticalCenter: parent.verticalCenter
 
                         Row {
+                            id: tempHumPresRow
                             spacing: Theme.paddingSmall
 
                             Image {
@@ -277,92 +310,82 @@ Page {
                                         : "icons/celsius-white.png"      // White icon for dark background
                                 width: Theme.iconSizeSmall
                                 height: Theme.iconSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Label {
                                 id: tempLabel
                                 text: model.temperature + " °C"
                                 font.pixelSize: Theme.fontSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Image {
                                 source: "icons/humidity-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
                                 width: Theme.iconSizeSmall
                                 height: Theme.iconSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Label {
                                 id: humLabel
                                 text: model.humidity + " %rH"
                                 font.pixelSize: Theme.fontSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Image {
                                 source: "icons/pressure-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
                                 width: Theme.iconSizeSmall
                                 height: Theme.iconSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Label {
                                 id: presLabel
                                 text: model.pressure + " mBar"
                                 font.pixelSize: Theme.fontSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
                         }
 
                         Row {
+                            visible: !isAir
                             spacing: Theme.paddingSmall
 
                             Image {
                                 source: "icons/x-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
                                 width: Theme.iconSizeSmall
                                 height: Theme.iconSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Label {
                                 id: accXLabel
                                 text: model.accX + " g"
                                 font.pixelSize: Theme.fontSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Image {
                                 source: "icons/y-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
                                 width: Theme.iconSizeSmall
                                 height: Theme.iconSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Label {
                                 id: accYLabel
                                 text: model.accY + " g"
                                 font.pixelSize: Theme.fontSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Image {
                                 source: "icons/z-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
                                 width: Theme.iconSizeSmall
                                 height: Theme.iconSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Label {
                                 id: accZLabel
                                 text: model.accZ + " g"
                                 font.pixelSize: Theme.fontSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
                         }
 
                         Row {
+                            visible: !isAir
                             spacing: Theme.paddingSmall
 
                             Image {
@@ -370,14 +393,12 @@ Page {
                                 source: "icons/battery-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
                                 width: Theme.iconSizeSmall
                                 height: Theme.iconSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Label {
                                 id: voltageLabel
                                 text: model.deviceVoltage + " V"
                                 font.pixelSize: Theme.fontSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                                 color: model.deviceVoltage < 2.5 ? "red" : Theme.primaryColor
                             }
 
@@ -386,14 +407,77 @@ Page {
                                 source: "icons/movement-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
                                 width: Theme.iconSizeSmall
                                 height: Theme.iconSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
                             }
 
                             Label {
                                 id: movementLabel
                                 text: model.deviceMovement + " Moves"
                                 font.pixelSize: Theme.fontSizeSmall
-                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+
+                        Row {
+                            visible: isAir
+                            spacing: Theme.paddingSmall
+
+                            Image {
+                                source: "icons/pm25-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
+                                width: Theme.iconSizeSmall
+                                height: Theme.iconSizeSmall
+                            }
+
+                            Label {
+                                text: model.pm25 + " µg/m³"
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+
+                            Image {
+                                source: "icons/co2-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
+                                width: Theme.iconSizeSmall
+                                height: Theme.iconSizeSmall
+                            }
+
+                            Label {
+                                text: model.co2 + " ppm"
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+
+                            Image {
+                                source: "icons/voc-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
+                                width: Theme.iconSizeSmall
+                                height: Theme.iconSizeSmall
+                            }
+
+                            Label {
+                                text: model.voc + " idx"
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+                        }
+
+                        Row {
+                            visible: isAir
+                            spacing: Theme.paddingSmall
+
+                            Image {
+                                source: "icons/nox-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
+                                width: Theme.iconSizeSmall
+                                height: Theme.iconSizeSmall
+                            }
+
+                            Label {
+                                text: model.nox + " idx"
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+
+                            Image {
+                                source: "icons/calibrating-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
+                                width: Theme.iconSizeSmall
+                                height: Theme.iconSizeSmall
+                            }
+
+                            Label {
+                                text: model.calibrating
+                                font.pixelSize: Theme.fontSizeSmall
                             }
                         }
                     }
@@ -409,6 +493,7 @@ Page {
                             var selectedDevice = {
                                 deviceName: model.deviceName,
                                 deviceAddress: model.deviceAddress,
+                                isAir: isAir,
                             }
                             // On default show last 24h data
                             var currentTime = Math.floor(Date.now() / 1000);
@@ -425,7 +510,8 @@ Page {
                         onClicked: {
                             var selectedDevice = {
                                 deviceName: model.deviceName,
-                                deviceAddress: model.deviceAddress
+                                deviceAddress: model.deviceAddress,
+                                isAir: isAir,
                             }
                             // Handle button click to navigate to the page displaying data fetch setup
                             pageStack.push(Qt.resolvedUrl("GetDataPage.qml"), {selectedDevice: selectedDevice})
@@ -533,6 +619,27 @@ Page {
                 }
             }
         }
+        onAirDeviceDataUpdated: {
+            console.log("Ruuvi Air updated: " + mac)
+            for (var i = 0; i < deviceModel.count; i++) {
+                var device = deviceModel.get(i)
+                if (device.deviceAddress === mac) {
+                    deviceModel.setProperty(i, "temperature", temperature.toFixed(2))
+                    deviceModel.setProperty(i, "humidity", humidity.toFixed(2))
+                    deviceModel.setProperty(i, "pressure", pressure.toFixed(2))
+                    deviceModel.setProperty(i, "pm25", pm25.toFixed(2))
+                    deviceModel.setProperty(i, "co2", co2.toString())
+                    deviceModel.setProperty(i, "voc", voc.toString())
+                    deviceModel.setProperty(i, "nox", nox.toString())
+                    deviceModel.setProperty(i, "iaqs", iaqs.toString())
+                    deviceModel.setProperty(i, "calibrating", calibrating ? "Yes" : "No")
+                    deviceModel.setProperty(i, "meas_seq", sequence.toString())
+                    deviceModel.setProperty(i, "last_obs", timestamp.toString())
+                    deviceModel.setProperty(i, "showBluetoothIcon", true)
+                    break
+                }
+            }
+        }
     }
 
     Connections {
@@ -553,6 +660,7 @@ Page {
             }
 
             if (existingDeviceIndex === -1) {
+                var isAir = deviceName.toLowerCase().indexOf("air") !== -1;
                 // Add the found device to the model
                 deviceModel.append({
                     deviceName: deviceName,
@@ -567,7 +675,14 @@ Page {
                     accZ: "NA",
                     last_obs: "NA",
                     meas_seq: "NA",
-                    showBluetoothIcon: true
+                    showBluetoothIcon: true,
+                    // Air-specific fields: undefined for Air devices, "NA" for normal Ruuvi Tags
+                    pm25:        isAir ? undefined : "NA",
+                    co2:         isAir ? undefined : "NA",
+                    voc:         isAir ? undefined : "NA",
+                    nox:         isAir ? undefined : "NA",
+                    iaqs:        isAir ? undefined : "NA",
+                    calibrating: isAir ? undefined : "NA"
                 });
             }
         }

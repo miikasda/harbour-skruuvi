@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023-2024  Miika Malin
+    Copyright (C) 2023-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,6 +21,10 @@
 worker::worker(database* db, QString deviceAddress, QString deviceName, const QVariantList& data)
     : db(db), deviceAddress(deviceAddress), deviceName(deviceName), data(data) {}
 
+worker::worker(database* db, const QString& deviceAddress, bool isAir, int startTime, int endTime, int maxPoints)
+    : QObject(nullptr), db(db), deviceAddress(deviceAddress), plotIsAir(isAir),
+      plotStartTime(startTime), plotEndTime(endTime), plotMaxPoints(maxPoints) {}
+
 void worker::inputRawData() {
     // Define sensor values
     constexpr int TEMPERATURE = 0x30;
@@ -34,6 +38,10 @@ void worker::inputRawData() {
     QList<QPair<int, double>> temperatureList;
     QList<QPair<int, double>> humidityList;
     QList<QPair<int, double>> airPressureList;
+    QList<QPair<int, double>> pm25List;
+    QList<QPair<int, double>> co2List;
+    QList<QPair<int, double>> vocList;
+    QList<QPair<int, double>> noxList;
 
     // Loop over the data
     foreach (const QVariant& item, data) {
@@ -44,40 +52,269 @@ void worker::inputRawData() {
 
         // Parse the data
         QVariantList itemList = item.toList();
-        int sensor = itemList[1].toInt();
-        int timestamp = itemList[3].toInt();
-        double value = static_cast<double>(itemList[4].toInt()) / 100.0;
+        if (itemList.size() == 5) {
+            // RuuviTag
+            int sensor = itemList[1].toInt();
+            int timestamp = itemList[3].toInt();
+            double value = static_cast<double>(itemList[4].toInt()) / 100.0;
 
-        // Collect the data to sensor lists
-        switch (sensor) {
-            case TEMPERATURE:
-                temperatureList.append(qMakePair(timestamp, value));
-                break;
-            case HUMIDITY:
-                if (value >= 0 && value <= 100) {
-                    humidityList.append(qMakePair(timestamp, value));
-                }
-                break;
-            case AIR_PRESSURE:
-                if (value >= 0 && value <= 10000) {
-                    airPressureList.append(qMakePair(timestamp, value));
-                }
-                break;
+            // Collect the data to sensor lists
+            switch (sensor) {
+                case TEMPERATURE:
+                    temperatureList.append(qMakePair(timestamp, value));
+                    break;
+                case HUMIDITY:
+                    if (value >= 0 && value <= 100) {
+                        humidityList.append(qMakePair(timestamp, value));
+                    }
+                    break;
+                case AIR_PRESSURE:
+                    if (value >= 0 && value <= 10000) {
+                        airPressureList.append(qMakePair(timestamp, value));
+                    }
+                    break;
+            }
+        } else {
+            // RuuviAir, Data format E1
+            // https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-e1
+            const int ts = itemList[3].toInt();
+            const int tempRaw = itemList[4].toInt();   // int16
+            const int humRaw  = itemList[5].toInt();   // uint16
+            const int presRaw = itemList[6].toInt();   // uint16
+            const int pm25Raw = itemList[7].toInt();   // uint16
+            const int co2Raw  = itemList[8].toInt();   // uint16
+
+            const int vocByte = itemList[9].toInt()  & 0xFF;  // uint8
+            const int noxByte = itemList[10].toInt() & 0xFF;  // uint8
+            const int flags   = itemList[11].toInt() & 0xFF;  // uint8
+
+            // Reconstruct 9-bit VOC/NOx using flags bits 6 and 7 (bit9 extension)
+            const int vocRaw = (vocByte << 1) | ((flags >> 6) & 0x01);
+            const int noxRaw = (noxByte << 1) | ((flags >> 7) & 0x01);
+
+            // Convert to real values + handle invalid
+            const double tempC = (tempRaw == -32768) ? std::numeric_limits<double>::quiet_NaN()
+                                                    : static_cast<double>(tempRaw) / 200.0;
+            const double humPct = (humRaw == 0xFFFF) ? std::numeric_limits<double>::quiet_NaN()
+                                                    : static_cast<double>(humRaw) / 400.0;
+            const double presPa = (presRaw == 0xFFFF) ? std::numeric_limits<double>::quiet_NaN()
+                                                    : static_cast<double>(presRaw + 50000);
+            const double presHpa = std::isnan(presPa) ? std::numeric_limits<double>::quiet_NaN()
+                                                    : presPa / 100.0;
+            const double pm25 = (pm25Raw == 0xFFFF) ? std::numeric_limits<double>::quiet_NaN()
+                                                    : static_cast<double>(pm25Raw) / 10.0;
+            const double co2 = (co2Raw == 0xFFFF) ? std::numeric_limits<double>::quiet_NaN()
+                                                : static_cast<double>(co2Raw);
+            const double voc = (vocRaw == 0x1FF) ? -1 : vocRaw;
+            const double nox = (noxRaw == 0x1FF) ? -1 : noxRaw;
+
+            // Collect to lists (skip invalids)
+            if (!std::isnan(tempC)) {
+                temperatureList.append(qMakePair(ts, tempC));
+            }
+            if (!std::isnan(humPct) && humPct >= 0.0 && humPct <= 100.0) {
+                humidityList.append(qMakePair(ts, humPct));
+            }
+            if (!std::isnan(presHpa) && presHpa >= 0.0 && presHpa <= 10000.0) {
+                airPressureList.append(qMakePair(ts, presHpa));
+            }
+            if (!std::isnan(pm25)) {
+                pm25List.append(qMakePair(ts, pm25));
+            }
+            if (!std::isnan(co2)) {
+                co2List.append(qMakePair(ts, co2));
+            }
+            if (!std::isnan(voc)) {
+                vocList.append(qMakePair(ts, voc));
+            }
+            if (!std::isnan(nox)) {
+                noxList.append(qMakePair(ts, nox));
+            }
         }
     }
 
     // Insert the sensor data if the corresponding lists are not empty
     if (!temperatureList.isEmpty()) {
+        emit inputProgress(1);
         db->insertSensorData(deviceAddress, "temperature", temperatureList);
     }
     if (!humidityList.isEmpty()) {
+        emit inputProgress(2);
         db->insertSensorData(deviceAddress, "humidity", humidityList);
     }
     if (!airPressureList.isEmpty()) {
+        emit inputProgress(3);
         db->insertSensorData(deviceAddress, "air_pressure", airPressureList);
+    }
+    if (!pm25List.isEmpty()) {
+        emit inputProgress(4);
+        db->insertSensorData(deviceAddress, "pm25", pm25List);
+    }
+    if (!co2List.isEmpty()) {
+        emit inputProgress(5);
+        db->insertSensorData(deviceAddress, "co2", co2List);
+    }
+    if (!vocList.isEmpty()) {
+        emit inputProgress(6);
+        db->insertSensorData(deviceAddress, "voc", vocList);
+    }
+    if (!noxList.isEmpty()) {
+        emit inputProgress(7);
+        db->insertSensorData(deviceAddress, "nox", noxList);
     }
     qDebug() << "Inserted sensor data";
 
     // Emit the inputFinished signal to indicate that the operation is completed
     emit inputFinished();
+}
+
+bool worker::tryParsePointMap(const QVariant& v, worker::DsPoint& out) {
+    if (v.type() != QVariant::Map) return false;
+    const QVariantMap m = v.toMap();
+    if (!m.contains("x") || !m.contains("y")) return false;
+    out.x = m.value("x").toDouble();
+    out.y = m.value("y").toDouble();
+    return true;
+}
+
+QVariant worker::makePointVariant(const worker::DsPoint& p) {
+    QVariantMap m;
+    m["x"] = p.x;
+    m["y"] = p.y;
+    return m;
+}
+
+void worker::flushBucketToOutput(const QVector<worker::DsPoint>& bucket, QVariantList& out) {
+    if (bucket.isEmpty()) return;
+
+    worker::DsPoint minP = bucket[0];
+    worker::DsPoint maxP = bucket[0];
+
+    for (int i = 1; i < bucket.size(); ++i) {
+        if (bucket[i].y < minP.y) minP = bucket[i];
+        if (bucket[i].y > maxP.y) maxP = bucket[i];
+    }
+
+    if (minP.x == maxP.x && minP.y == maxP.y) {
+        out.append(makePointVariant(minP));
+    } else if (minP.x < maxP.x) {
+        out.append(makePointVariant(minP));
+        out.append(makePointVariant(maxP));
+    } else {
+        out.append(makePointVariant(maxP));
+        out.append(makePointVariant(minP));
+    }
+}
+
+QVariantList worker::downsampleMinMax(const QVariantList& pointsIn, int maxPoints, bool* aggregatedOut, double* bucketDurationOut) {
+    if (aggregatedOut) *aggregatedOut = false;
+    if (bucketDurationOut) *bucketDurationOut = 0.0;
+
+    if (pointsIn.isEmpty() || maxPoints <= 0) {
+        return QVariantList();
+    }
+
+    // Parse into numeric list (skip malformed)
+    QVector<DsPoint> points;
+    points.reserve(pointsIn.size());
+    for (const QVariant& v : pointsIn) {
+        DsPoint p;
+        if (tryParsePointMap(v, p)) points.push_back(p);
+    }
+    if (points.isEmpty()) return QVariantList();
+
+    // Same rule as QML: if <= 2*maxPoints, no downsampling
+    if (points.size() <= 2 * maxPoints) {
+        return pointsIn;
+    }
+
+    // Compute total time range
+    const double startX = points.front().x;
+    const double endX   = points.back().x;
+    const double range  = endX - startX;
+    if (range <= 0.0) {
+        return pointsIn;
+    }
+
+    const double bucketDuration = range / double(maxPoints);
+    if (bucketDurationOut) *bucketDurationOut = bucketDuration;
+
+    QVariantList out;
+    out.reserve(2 * maxPoints);
+
+    // Current bucket [bucketStart, bucketEnd]
+    double bucketStart = startX;
+    double bucketEnd   = bucketStart + bucketDuration;
+    QVector<DsPoint> bucket;
+    bucket.reserve(64);
+
+    for (int i = 0; i < points.size(); ++i) {
+        const DsPoint& p = points[i];
+
+        if (p.x <= bucketEnd) {
+            bucket.push_back(p);
+        } else {
+            // Finish current bucket
+            flushBucketToOutput(bucket, out);
+
+            // Start next bucket
+            bucket.clear();
+            bucket.push_back(p);
+
+            bucketStart = bucketEnd;
+            bucketEnd   = bucketStart + bucketDuration;
+        }
+    }
+
+    // Flush last bucket
+    flushBucketToOutput(bucket, out);
+    if (aggregatedOut) *aggregatedOut = true;
+    return out;
+}
+
+void worker::plotData() {
+    QVariantMap result;
+    const int maxPts = (plotMaxPoints > 0) ? plotMaxPoints : 500;
+
+    // Fetch data
+    QVariantList tempRaw = db->getSensorData(deviceAddress, "temperature",  plotStartTime, plotEndTime);
+    QVariantList humRaw  = db->getSensorData(deviceAddress, "humidity",     plotStartTime, plotEndTime);
+    QVariantList presRaw = db->getSensorData(deviceAddress, "air_pressure", plotStartTime, plotEndTime);
+
+    // Downsample
+    bool aggregated = false;
+    double bucketDuration = 0.0;
+
+    QVariantList tempDs = downsampleMinMax(tempRaw, maxPts, &aggregated, &bucketDuration);
+    QVariantList humDs  = downsampleMinMax(humRaw,  maxPts, nullptr, nullptr);
+    QVariantList presDs = downsampleMinMax(presRaw, maxPts, nullptr, nullptr);
+
+    //Return BOTH
+    result["temperature_raw"] = tempRaw;
+    result["humidity_raw"] = humRaw;
+    result["air_pressure_raw"] = presRaw;
+    result["temperature_ds"] = tempDs;
+    result["humidity_ds"] = humDs;
+    result["air_pressure_ds"] = presDs;
+    result["aggregated"] = aggregated;
+    result["bucketDuration"] = bucketDuration;
+
+    if (plotIsAir) {
+        QVariantList pm25Raw = db->getSensorData(deviceAddress, "pm25", plotStartTime, plotEndTime);
+        QVariantList co2Raw  = db->getSensorData(deviceAddress, "co2",  plotStartTime, plotEndTime);
+        QVariantList vocRaw  = db->getSensorData(deviceAddress, "voc",  plotStartTime, plotEndTime);
+        QVariantList noxRaw  = db->getSensorData(deviceAddress, "nox",  plotStartTime, plotEndTime);
+        QVariantList iaqsRaw = db->calculateIAQSList(pm25Raw, co2Raw);
+        result["pm25_raw"] = pm25Raw;
+        result["co2_raw"]  = co2Raw;
+        result["voc_raw"]  = vocRaw;
+        result["nox_raw"]  = noxRaw;
+        result["iaqs_raw"] = iaqsRaw;
+        result["pm25_ds"] = downsampleMinMax(pm25Raw, maxPts);
+        result["co2_ds"]  = downsampleMinMax(co2Raw,  maxPts);
+        result["voc_ds"]  = downsampleMinMax(vocRaw,  maxPts);
+        result["nox_ds"]  = downsampleMinMax(noxRaw,  maxPts);
+        result["iaqs_ds"] = downsampleMinMax(iaqsRaw, maxPts);
+    }
+    emit plotReady(result);
 }
