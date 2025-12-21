@@ -118,8 +118,37 @@ database::database(QObject* parent) : QObject(parent) {
     checkAndAddColumn("devices", "calibrating", "INT");
 }
 
+QSqlDatabase database::connectionForCurrentThread()
+{
+    // If we're in the same thread as the database object, use the existing connection.
+    if (QThread::currentThread() == this->thread()) {
+        return db;
+    }
+
+    // Otherwise create/use a per-thread connection (same file).
+    const QString connName =
+        QStringLiteral("skruuvi-%1").arg(reinterpret_cast<quintptr>(QThread::currentThreadId()));
+
+    if (QSqlDatabase::contains(connName)) {
+        return QSqlDatabase::database(connName);
+    }
+
+    QSqlDatabase d = QSqlDatabase::addDatabase("QSQLITE", connName);
+    d.setDatabaseName(db.databaseName());
+    if (!d.open()) {
+        qWarning() << "DB open failed:" << d.lastError();
+    }
+    return d;
+}
+
 void database::executeQuery(const QString& queryStr) {
-    QSqlQuery query(db);
+    QSqlDatabase d = connectionForCurrentThread();
+    if (!d.isOpen()) {
+        qDebug() << "DB not open:" << d.lastError();
+        return;
+    }
+
+    QSqlQuery query(d);
     if (!query.exec(queryStr)) {
         qDebug() << "Error executing query:" << query.lastError().text();
     }
@@ -431,14 +460,53 @@ void database::inputManufacturerData(const QString &deviceAddress, const std::ar
     }
 }
 
-void database::insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData) {
-    // Loop over the sensor data and insert into the table
-    for (const QPair<int, double>& item : sensorData) {
-        int timestamp = item.first;
-        double value = item.second;
-        QString insertQuery = "INSERT OR IGNORE INTO " + sensor + " (device, timestamp, value) "
-                              "VALUES ('" + deviceAddress + "', " + QString::number(timestamp) + ", " + QString::number(value) + ")";
-        executeQuery(insertQuery);
+void database::insertSensorData(const QString &deviceAddress, const QString &sensor,
+                                const QList<QPair<int, double>> &sensorData)
+{
+    if (sensorData.isEmpty()) return;
+
+    QSqlDatabase d = connectionForCurrentThread();
+    if (!d.isOpen()) {
+        qDebug() << "DB not open:" << d.lastError();
+        return;
+    }
+
+    if (!d.transaction()) {
+        qWarning() << "Transaction start failed:" << d.lastError();
+        return;
+    }
+
+    QSqlQuery q(d);
+    if (!q.prepare("INSERT OR IGNORE INTO " + sensor + " (device, timestamp, value) VALUES (?, ?, ?)")) {
+        qWarning() << "Prepare failed:" << q.lastError();
+        d.rollback();
+        return;
+    }
+
+    QVariantList devices, timestamps, values;
+    devices.reserve(sensorData.size());
+    timestamps.reserve(sensorData.size());
+    values.reserve(sensorData.size());
+
+    for (const auto& item : sensorData) {
+        devices    << deviceAddress;
+        timestamps << item.first;
+        values     << item.second;
+    }
+
+    q.addBindValue(devices);
+    q.addBindValue(timestamps);
+    q.addBindValue(values);
+
+    if (!q.execBatch()) {
+        qWarning() << "execBatch failed:" << q.lastError();
+        d.rollback();
+        return;
+    }
+
+    if (!d.commit()) {
+        qWarning() << "Commit failed:" << d.lastError();
+        d.rollback();
     }
 }
 

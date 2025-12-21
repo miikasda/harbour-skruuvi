@@ -33,7 +33,7 @@ public:
     void inputManufacturerData(const QString &deviceAddress, const std::array<uint8_t,24> &manufacturerData);
     Q_INVOKABLE QVariantList getSensorData(QString deviceAddress, QString sensor, int startTime, int endTime);
     void executeQuery(const QString& queryStr);
-    void insertSensorData(QString deviceAddress, QString sensor, const QList<QPair<int, double>>& sensorData);
+    void insertSensorData(const QString &deviceAddress, const QString &sensor, const QList<QPair<int, double>> &sensorData);
     Q_INVOKABLE QVariantList getDevices();
     Q_INVOKABLE int getLastMeasurement(const QString deviceAddress, const QString sensor);
     Q_INVOKABLE int getLastSync(const QString deviceAddress);
@@ -52,6 +52,7 @@ private:
     void updateRuuviAir(const QString &mac, double temperature, double humidity, double pressure,
         double pm25, int co2, int voc, int nox, int calibrating, int sequence, int timestamp);
     double calculateIAQS(double pm25, double co2);
+    QSqlDatabase connectionForCurrentThread();
 
 signals:
     void inputFinished();
