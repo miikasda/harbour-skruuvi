@@ -5,12 +5,21 @@ import "../modules/Opal/About" as A
 A.AboutPageBase {
     appName: "Skruuvi"
     appIcon: Qt.resolvedUrl("images/skruuvi-icon.png")
-    appVersion: "1.3.0"
+    appVersion: "2.0.0"
     description: "Reader for Ruuvi sensors on Sailfish OS"
     authors: "Miika Malin"
     licenses: A.License { spdxId: "GPL-3.0-or-later" }
     changelogItems: [
         // add new entries at the top
+        A.ChangelogItem {
+            version: "v2.0.0"
+            date: "2025-12-24"
+            paragraphs: "Added support for scanning new measurements from Bluetooth advertisements in the background, " +
+                        "and added support for the new Ruuvi Air indoor air quality sensor. " +
+                        "Improved efficiency for data fetching and plotting, and added a low battery indication. " +
+                        "Refined the cover page experience, and updated the app icons to follow the user’s theme for better visibility. " +
+                        "For the complete list of changes, see the GitHub release."
+        },
         A.ChangelogItem {
             version: "v1.3.0"
             date: "2024-07-24"

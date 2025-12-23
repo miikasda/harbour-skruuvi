@@ -1,8 +1,8 @@
-![Skruuvi](qml/pages/images/skruuvi-logo.png?raw=true)
+![Skruuvi](qml/pages/images/skruuvi-logo-white.png?raw=true)
 
 # Skruuvi
 
-Skruuvi is a powerful application designed for Sailfish OS that allows you to effortlessly read and plot history data from [RuuviTags](https://ruuvi.com/). With Skruuvi, you can easily access and analyze sensor information from your RuuviTag devices right from your Sailfish OS smartphone.
+Skruuvi is a powerful application designed for Sailfish OS that allows you to effortlessly read and plot data from [Ruuvi devices](https://ruuvi.com/). With Skruuvi, you can easily access and analyze sensor information from your Ruuvi devices right from your Sailfish OS smartphone.
 
 <p align="center">
     <img alt="Select device" src="./screenshots/select_device.png?" width="30%"> &nbsp; &nbsp; &nbsp; &nbsp;
@@ -13,9 +13,9 @@ Skruuvi is a powerful application designed for Sailfish OS that allows you to ef
 
 ## Notes
 
-Skruuvi is an unofficial application and is not developed or maintained by Ruuvi. It is created by independent developers who are passionate about enabling RuuviTag users to maximize their sensor capabilities on Sailfish OS.
+Skruuvi is an unofficial application and is not developed or maintained by Ruuvi. It is created by independent developers who are passionate about enabling Ruuvi users to maximize their sensor capabilities on Sailfish OS.
 
-For any official RuuviTag support, firmware updates, or inquiries, please refer to the official Ruuvi website or consult the Ruuvi community forums.
+For any official support, firmware updates, or inquiries, please refer to the official Ruuvi website or consult the Ruuvi community forums.
 
 ## Supported architectures, SFOS versions and RuuviTags
 
@@ -23,7 +23,7 @@ Skruuvi supports the aarch64 and armv7hl architectures. OS versions are supporte
 
 If you are aware that Skruuvi works on other architectures or older SFOS versions, please let me know.
 
-Skruuvi supports all RuuviTag sensors with firmware starting from 3.30.x. If you cant see your Ruuvi in the device list, try [updating](https://ruuvi.com/software-update/) the firmware.
+Skruuvi supports all RuuviTag sensors with firmware starting from 3.30.x, as well as Ruuvi Air devices. If you cant see your Ruuvi in the device list, try [updating](https://ruuvi.com/software-update/) the firmware.
 
 ## Distribution
 
