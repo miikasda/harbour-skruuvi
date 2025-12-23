@@ -1,6 +1,6 @@
 /*
     Skruuvi - Reader for Ruuvi sensors
-    Copyright (C) 2023  Miika Malin
+    Copyright (C) 2023-2025  Miika Malin
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -19,18 +19,60 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 
 CoverBackground {
+    // Which group of 3 metrics we show on the cover
+    property int metricsPage: 0
+
+    function cycleMetrics() {
+        // 0: temp/hum/pres
+        // 1: pm25/co2/voc
+        // 2: nox/iaqs/(blank)
+        metricsPage = (metricsPage + 1) % 3
+    }
+
+    // Helper to hide "NA" cleanly
+    function hasValue(v) {
+        return v !== undefined && v !== "NA" && v !== ""
+    }
+
     // Function to populate the ListModel with devices
     function populateDeviceModel() {
-        // Populate the ListModel with devices
         var devices = db.getDevices();
         for (var i = 0; i < devices.length; i++) {
-            var device = devices[i];
-            deviceModel.append(device);
+            var d = devices[i];
+            deviceModel.append({
+                deviceName: d.deviceName,
+                deviceAddress: d.deviceAddress,
+
+                temperature: (d.temperature !== undefined && d.temperature !== "NA")
+                                ? Number(d.temperature).toFixed(2)
+                                : "NA",
+                humidity: (d.humidity !== undefined && d.humidity !== "NA" && d.humidity < 163)
+                                ? Number(d.humidity).toFixed(2)
+                                : "NA",
+                pressure: (d.pressure !== undefined && d.pressure !== "NA" && d.pressure < 1155)
+                                ? Number(d.pressure).toFixed(2)
+                                : "NA",
+
+                pm25: (d.pm25 !== undefined && d.pm25 !== "NA")
+                                ? Number(d.pm25).toFixed(2)
+                                : "NA",
+                co2:  (d.co2  !== undefined && d.co2  !== "NA")
+                                ? d.co2.toString()
+                                : "NA",
+                voc:  (d.voc  !== undefined && d.voc  !== "NA")
+                                ? d.voc.toString()
+                                : "NA",
+                nox:  (d.nox  !== undefined && d.nox  !== "NA")
+                                ? d.nox.toString()
+                                : "NA",
+                iaqs: (d.iaqs !== undefined && d.iaqs !== "NA")
+                                ? d.iaqs.toString()
+                                : "NA",
+
+                last_obs: (d.last_obs !== undefined) ? d.last_obs : "NA"
+            });
         }
-        // Set the current index to display the first device
-        if (devices.length > 0) {
-            deviceListView.currentIndex = 0;
-        }
+        if (devices.length > 0) deviceListView.currentIndex = 0;
     }
 
     function formatDateTime(timestamp) {
@@ -55,108 +97,122 @@ CoverBackground {
             id: deviceModel
         }
 
+        Label {
+            anchors.centerIn: parent
+            text: "No known devices"
+            font.pixelSize: Theme.fontSizeLarge
+            color: Theme.highlightColor
+            visible: deviceModel.count === 0
+            wrapMode: Text.Wrap
+            horizontalAlignment: Text.AlignHCenter
+            width: parent.width - 2 * Theme.horizontalPageMargin
+        }
+
         delegate: ListItem {
             id: listItem
             width: parent.width
-            height: listItem.visible ? Theme.itemSizeSmall : 0
-            visible: index === deviceListView.currentIndex
+            contentHeight: ListView.isCurrentItem ? deviceListView.height : 0
+            height: contentHeight
+            visible: ListView.isCurrentItem
 
-            // Retrieve the device properties from the model
-            property var device: deviceModel.get(index)
+            // When switching devices, reset inner scroll
+            //onVisibleChanged: if (visible) flick.contentY = 0
 
-            // Retrieve the last measurement timestamp for each sensor of the current device
-            property int tempTimestamp: device && device.deviceAddress ? db.getLastMeasurement(device.deviceAddress, "temperature") : -1
-            property int humTimestamp: device && device.deviceAddress ? db.getLastMeasurement(device.deviceAddress, "humidity") : -1
-            property int presTimestamp: device && device.deviceAddress ? db.getLastMeasurement(device.deviceAddress, "air_pressure") : -1
+            property bool isAir: (model.co2 !== undefined && model.co2 !== "NA")
 
-            // Retrieve the latest sensor data for the current device
-            property var latestTemperature: device && device.deviceAddress ? db.getSensorData(device.deviceAddress, "temperature", tempTimestamp, tempTimestamp) : -1
-            property var latestHumidity: device && device.deviceAddress ? db.getSensorData(device.deviceAddress, "humidity", humTimestamp, humTimestamp) : -1
-            property var latestAirPressure: device && device.deviceAddress ? db.getSensorData(device.deviceAddress, "air_pressure", presTimestamp, presTimestamp) : -1
+            // Always 2 decimals for numeric values
+            function fmt2(v) {
+                if (v === undefined || v === "NA" || v === "") return v
+                var n = Number(v)
+                return isNaN(n) ? v : n.toFixed(2)
+            }
+
+            function updatedText() {
+                if (model.last_obs === undefined || model.last_obs === "NA") return ""
+                var ts = parseInt(model.last_obs, 10)
+                return isNaN(ts) ? "" : ("Updated " + formatDateTime(ts))
+            }
 
             Column {
                 id: dataColumn
-                // Display the device name
+                width: parent.width - Theme.paddingMedium
+                anchors.fill: parent
+                anchors.leftMargin: Theme.paddingMedium   // small left margin
+
                 Label {
-                    text: device && device.deviceName ? device.deviceName : "No known devices"
+                    text: model.deviceName ? model.deviceName : "No known devices"
                     color: Theme.highlightColor
                     font.bold: true
                 }
 
-                Rectangle {
-                    width: parent.width
-                    height: Theme.paddingSmall
-                    color: "transparent"
-                }
-
-                // Display the latest temperature
                 Label {
-                    text: "Temperature"
+                    text: listItem.updatedText()
+                    color: Theme.secondaryHighlightColor
+                    font.pixelSize: Theme.fontSizeSmall
+                    visible: text.length > 0
+                }
+
+                Rectangle { width: parent.width; height: Theme.paddingSmall; color: "transparent" }
+
+                // --- 3-slot view, controlled by metricsPage ---
+
+                // Slot 1
+                Label {
                     color: Theme.highlightColor
+                    text: metricsPage === 0 ? "Temperature"
+                        : metricsPage === 1 ? "PM2.5"
+                        : "NOx"
+                    visible: metricsPage === 0 || listItem.isAir
                 }
                 Label {
-                    text: {
-                        if (latestTemperature && latestTemperature.length > 0) {
-                            var timestamp = latestTemperature[0].x;
-                            var formattedDateTime = formatDateTime(timestamp);
-                            var temperatureValue = latestTemperature[0].y
-                            return formattedDateTime + " : " + temperatureValue;
-                        } else {
-                            return "";
-                        }
-                    }
+                    color: Theme.secondaryHighlightColor
+                    text: metricsPage === 0
+                            ? (hasValue(model.temperature) ? (listItem.fmt2(model.temperature) + " °C") : "")
+                        : metricsPage === 1
+                            ? (hasValue(model.pm25) ? (listItem.fmt2(model.pm25) + " µg/m³") : "")
+                        : (hasValue(model.nox) ? (model.nox + " idx") : "")
+                    visible: metricsPage === 0 || listItem.isAir
+                }
+
+                Rectangle { width: parent.width; height: Theme.paddingSmall; color: "transparent" }
+
+                // Slot 2
+                Label {
+                color: Theme.highlightColor
+                text: metricsPage === 0 ? "Humidity"
+                    : metricsPage === 1 ? "CO₂"
+                    : "VOC"
+                visible: metricsPage === 0 || listItem.isAir
+                }
+                Label {
+                    color: Theme.secondaryHighlightColor
+                    text: metricsPage === 0
+                            ? (hasValue(model.humidity) ? (listItem.fmt2(model.humidity) + " %rH") : "")
+                        : metricsPage === 1
+                            ? (hasValue(model.co2) ? (model.co2 + " ppm") : "")
+                        : (hasValue(model.voc) ? (model.voc + " idx") : "")
+                    visible: metricsPage === 0 || listItem.isAir
+                }
+
+                Rectangle { width: parent.width; height: Theme.paddingSmall; color: "transparent" }
+
+                // Slot 3
+                Label {
                     color: Theme.highlightColor
+                    text: metricsPage === 0 ? "Air Pressure"
+                        : metricsPage === 1 ? "IAQS"
+                        : ""
+                    visible: metricsPage !== 2 && (metricsPage === 0 || listItem.isAir)
                 }
-
-                Rectangle {
-                    width: parent.width
-                    height: Theme.paddingSmall
-                    color: "transparent"
+                Label {
+                    color: Theme.secondaryHighlightColor
+                    text: metricsPage === 0
+                            ? (hasValue(model.pressure) ? (listItem.fmt2(model.pressure) + " mBar") : "")
+                        : metricsPage === 1
+                            ? (hasValue(model.iaqs) ? (model.iaqs) : "")
+                        : ""
+                    visible: metricsPage !== 2 && (metricsPage === 0 || listItem.isAir)
                 }
-
-                // Display the latest humidity
-                 Label {
-                     text: "Humidity"
-                     color: Theme.highlightColor
-                 }
-                 Label {
-                     text: {
-                         if (latestHumidity && latestHumidity.length > 0) {
-                             var timestamp = latestHumidity[0].x;
-                             var formattedDateTime = formatDateTime(timestamp);
-                             var humidityValue = latestHumidity[0].y;
-                             return formattedDateTime + " : " + humidityValue;
-                         } else {
-                             return "";
-                         }
-                     }
-                     color: Theme.highlightColor
-                 }
-
-                 Rectangle {
-                     width: parent.width
-                     height: Theme.paddingSmall
-                     color: "transparent"
-                 }
-
-                 // Display the latest air pressure
-                 Label {
-                     text: "Air Pressure"
-                     color: Theme.highlightColor
-                 }
-                 Label {
-                     text: {
-                         if (latestAirPressure && latestAirPressure.length > 0) {
-                             var timestamp = latestAirPressure[0].x;
-                             var formattedDateTime = formatDateTime(timestamp);
-                             var airPressureValue = latestAirPressure[0].y;
-                             return formattedDateTime + " : " + airPressureValue;
-                         } else {
-                             return "";
-                         }
-                     }
-                     color: Theme.highlightColor
-                 }
             }
         }
 
@@ -171,23 +227,97 @@ CoverBackground {
     CoverActionList {
         id: coverAction
         CoverAction {
+            iconSource: "image://theme/icon-cover-subview"
+            onTriggered: {
+                // If not an Air device, keep the cover on page 0
+                if (!deviceListView.currentItem || !deviceListView.currentItem.isAir) {
+                    metricsPage = 0
+                    return
+                }
+                // Show next 3 values
+                cycleMetrics()
+            }
+        }
+        CoverAction {
             id: nextDeviceAction
             iconSource: "image://theme/icon-cover-next"
             onTriggered: {
                 // Move to next device in the ListView
                 var nextIndex = (deviceListView.currentIndex + 1) % deviceModel.count;
                 deviceListView.currentIndex = nextIndex;
+                metricsPage = 0;
             }
         }
-        CoverAction {
-            id: refreshAction
-            iconSource: "image://theme/icon-cover-refresh"
-            onTriggered: {
-                // Refresh the list view
-                deviceModel.clear();
-                populateDeviceModel();
+    }
+
+    Connections {
+        target: db
+
+        onDeviceDataUpdated: {
+            for (var i = 0; i < deviceModel.count; i++) {
+                var d = deviceModel.get(i);
+                if (d.deviceAddress === mac) {
+                    deviceModel.setProperty(i, "temperature", temperature.toFixed(2));
+                    deviceModel.setProperty(i, "humidity", (humidity < 163) ? humidity.toFixed(2) : "NA");
+                    deviceModel.setProperty(i, "pressure", (pressure < 1155) ? pressure.toFixed(2) : "NA");
+                    deviceModel.setProperty(i, "last_obs", timestamp.toString());
+                    break;
+                }
+            }
+        }
+
+        onAirDeviceDataUpdated: {
+            for (var i = 0; i < deviceModel.count; i++) {
+                var d = deviceModel.get(i);
+                if (d.deviceAddress === mac) {
+                    deviceModel.setProperty(i, "temperature", temperature.toFixed(2));
+                    deviceModel.setProperty(i, "humidity", humidity.toFixed(2));
+                    deviceModel.setProperty(i, "pressure", pressure.toFixed(2));
+
+                    deviceModel.setProperty(i, "pm25", pm25.toFixed(2));
+                    deviceModel.setProperty(i, "co2",  co2.toString());
+                    deviceModel.setProperty(i, "voc",  voc.toString());
+                    deviceModel.setProperty(i, "nox",  nox.toString());
+                    deviceModel.setProperty(i, "iaqs", iaqs.toString());
+
+                    deviceModel.setProperty(i, "last_obs", timestamp.toString());
+                    break;
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: bs
+
+        onDeviceFound: {
+            // Don’t add duplicates
+            for (var i = 0; i < deviceModel.count; i++) {
+                if (deviceModel.get(i).deviceAddress === deviceAddress) {
+                    return;
+                }
+            }
+
+            // Add new device with placeholder values
+            deviceModel.append({
+                deviceName: deviceName,
+                deviceAddress: deviceAddress,
+                temperature: "NA",
+                humidity: "NA",
+                pressure: "NA",
+                pm25: "NA",
+                co2:  "NA",
+                voc:  "NA",
+                nox:  "NA",
+                iaqs: "NA",
+                last_obs: "NA"
+            })
+
+            // If this is the first device, show it
+            if (deviceModel.count === 1) {
+                deviceListView.currentIndex = 0
+                metricsPage = 0
             }
         }
     }
 }
-
