@@ -67,7 +67,7 @@ Page {
 
         Image {
             id: skruuviLogo
-            source: "images/skruuvi-logo.png"
+            source: "images/skruuvi-logo-" + (Theme.colorScheme === Theme.DarkOnLight ? "black" : "white") + ".png"
             width: parent.width - (leftMargin + rightMargin)
             fillMode: Image.PreserveAspectFit
             //height: 0.2667 * skruuviLogo.width
