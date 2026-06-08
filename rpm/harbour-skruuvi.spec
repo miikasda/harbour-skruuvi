@@ -1,7 +1,7 @@
 Name:       harbour-skruuvi
 
 Summary:    Reader for Ruuvi sensors
-Version:    2.0.1
+Version:    2.0.2
 Release:    1
 License:    GPLv3
 URL:        https://github.com/miikasda/harbour-skruuvi

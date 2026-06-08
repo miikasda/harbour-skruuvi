@@ -22,6 +22,7 @@
 #include <QVariant>
 #include <QVariantList>
 #include <QtSql>
+#include <array>
 
 class database : public QObject {
     Q_OBJECT

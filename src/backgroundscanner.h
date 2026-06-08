@@ -20,6 +20,7 @@
 #include <QDBusObjectPath>
 #include <QDBusArgument>
 #include <QSet>
+#include <array>
 #include "database.h"
 
 class backgroundscanner : public QObject
