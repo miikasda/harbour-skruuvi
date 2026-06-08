@@ -21,7 +21,16 @@
 #include <QDebug>
 #include <QDBusConnection>
 #include <QDBusArgument>
+#include <QDBusMetaType>
+#include <QDBusReply>
 #include <QByteArray>
+#include <QMap>
+
+typedef QMap<QString, QVariantMap> BluezInterfaceMap;
+typedef QMap<QDBusObjectPath, BluezInterfaceMap> BluezManagedObjectMap;
+
+Q_DECLARE_METATYPE(BluezInterfaceMap)
+Q_DECLARE_METATYPE(BluezManagedObjectMap)
 
 backgroundscanner::backgroundscanner(QObject *parent, database* db)
     : QObject(parent)
@@ -29,6 +38,9 @@ backgroundscanner::backgroundscanner(QObject *parent, database* db)
     , db(db)
     , scanning(false)
 {
+    qDBusRegisterMetaType<BluezInterfaceMap>();
+    qDBusRegisterMetaType<BluezManagedObjectMap>();
+
     startScan();
 }
 
@@ -62,9 +74,98 @@ std::array<uint8_t, 24> backgroundscanner::parseManufacturerData(const QDBusArgu
     return manufacturerData;
 }
 
+QString backgroundscanner::findAdapterPath()
+{
+    QDBusInterface objectManager("org.bluez", "/", "org.freedesktop.DBus.ObjectManager", bus);
+    QDBusReply<BluezManagedObjectMap> reply = objectManager.call("GetManagedObjects");
+    if (!reply.isValid()) {
+        qWarning() << "Failed to query Bluetooth adapters:" << reply.error().message();
+        return {};
+    }
+
+    QString firstAdapter;
+    const BluezManagedObjectMap objects = reply.value();
+    for (auto object = objects.constBegin(); object != objects.constEnd(); ++object) {
+        const auto adapter = object.value().constFind("org.bluez.Adapter1");
+        if (adapter == object.value().constEnd()) {
+            continue;
+        }
+
+        const QString path = object.key().path();
+        if (firstAdapter.isEmpty()) {
+            firstAdapter = path;
+        }
+        if (adapter.value().value("Powered").toBool()) {
+            return path;
+        }
+    }
+
+    return firstAdapter;
+}
+
+void backgroundscanner::loadKnownDevices()
+{
+    QDBusInterface objectManager("org.bluez", "/", "org.freedesktop.DBus.ObjectManager", bus);
+    QDBusReply<BluezManagedObjectMap> reply = objectManager.call("GetManagedObjects");
+    if (!reply.isValid()) {
+        qWarning() << "Failed to query known Bluetooth devices:" << reply.error().message();
+        return;
+    }
+
+    const QString devicePathPrefix = adapterPath + "/";
+    const BluezManagedObjectMap objects = reply.value();
+    for (auto object = objects.constBegin(); object != objects.constEnd(); ++object) {
+        if (object.key().path().startsWith(devicePathPrefix)
+                && object.value().contains("org.bluez.Device1")) {
+            processDevice(object.key());
+        }
+    }
+}
+
+void backgroundscanner::processDevice(const QDBusObjectPath &objectPath)
+{
+    QDBusInterface deviceInterface("org.bluez", objectPath.path(), "org.bluez.Device1", bus);
+
+    const QString deviceName = deviceInterface.property("Name").toString();
+    const QString deviceAddress = deviceInterface.property("Address").toString();
+    if (!deviceName.contains("Ruuvi") || deviceAddress.isEmpty()) {
+        return;
+    }
+
+    emit deviceFound(deviceName, deviceAddress);
+    db->addDevice(deviceAddress, deviceName);
+
+    // Cached devices may receive fresh ManufacturerData after this method returns.
+    if (!monitoredDevicePaths.contains(objectPath.path())) {
+        const bool connected = bus.connect(
+            "org.bluez", objectPath.path(), "org.freedesktop.DBus.Properties",
+            "PropertiesChanged", this,
+            SLOT(onPropertiesChanged(QString, QVariantMap, QStringList, QDBusMessage)));
+        if (connected) {
+            monitoredDevicePaths.insert(objectPath.path());
+        } else {
+            qWarning() << "Failed to monitor Ruuvi device at path" << objectPath.path();
+        }
+    }
+
+    // Read the current advertisement data if BlueZ already has it.
+    QDBusInterface deviceProps("org.bluez", objectPath.path(), "org.freedesktop.DBus.Properties", bus);
+    QDBusMessage reply = deviceProps.call("Get", "org.bluez.Device1", "ManufacturerData");
+    if (reply.type() == QDBusMessage::ErrorMessage || reply.arguments().isEmpty()) {
+        return;
+    }
+
+    const QVariant firstReply = reply.arguments().first();
+    const QVariant firstReplyVariant = firstReply.value<QDBusVariant>().variant();
+    const QDBusArgument &dbusArgs = firstReplyVariant.value<QDBusArgument>();
+    const std::array<uint8_t, 24> manufacturerData = parseManufacturerData(dbusArgs);
+    qDebug() << "Backgroundscanner: Got new ManufacturerData (processDevice):";
+    db->inputManufacturerData(deviceAddress, manufacturerData);
+}
+
 QString backgroundscanner::macFromObjectPath(const QString &path)
 {
-    // Expected format: "/org/bluez/hci0/dev_XX_XX_XX_XX_XX_XX"
+    // Expected format: "/org/bluez/<adapter>/dev_XX_XX_XX_XX_XX_XX"
     QString base = path.section('/', -1); // get last segment "dev_xx_xx..."
     if (!base.startsWith("dev_"))
         return {};
@@ -76,8 +177,15 @@ QString backgroundscanner::macFromObjectPath(const QString &path)
 void backgroundscanner::startScan()
 {
     qDebug() << "Starting background scan...";
+    adapterPath = findAdapterPath();
+    if (adapterPath.isEmpty()) {
+        qWarning() << "No Bluetooth adapter found";
+        emit discoveryStopped();
+        return;
+    }
+
     // Create the adapter interface
-    QDBusInterface adapterInterface("org.bluez", "/org/bluez/hci0", "org.bluez.Adapter1", bus, this);
+    QDBusInterface adapterInterface("org.bluez", adapterPath, "org.bluez.Adapter1", bus, this);
 
     // Check if bluetooth adapter is on
     QVariant poweredVariant = adapterInterface.property("Powered");
@@ -104,12 +212,13 @@ void backgroundscanner::startScan()
     bus.connect("org.bluez", "/", "org.freedesktop.DBus.ObjectManager", "InterfacesAdded",
                 this, SLOT(onInterfacesAdded(QDBusObjectPath, QVariantMap)));
     scanning = true;
+    loadKnownDevices();
 }
 
 void backgroundscanner::stopScan()
 {
     // Create the adapter interface
-    QDBusInterface adapterInterface("org.bluez", "/org/bluez/hci0", "org.bluez.Adapter1", bus, this);
+    QDBusInterface adapterInterface("org.bluez", adapterPath, "org.bluez.Adapter1", bus, this);
     QDBusMessage stopDiscovery = adapterInterface.call("StopDiscovery");
     if (stopDiscovery.type() == QDBusMessage::ErrorMessage) {
         qDebug() << "Failed to stop device discovery:" << stopDiscovery.errorMessage();
@@ -129,46 +238,7 @@ void backgroundscanner::onInterfacesAdded(const QDBusObjectPath &objectPath, con
         return;  // Ignore signals if not scanning
     }
     if (interfaces.contains("org.bluez.Device1")) {
-        QDBusInterface deviceInterface("org.bluez", objectPath.path(), "org.bluez.Device1", bus);
-
-        // Get the device name
-        QString deviceName;
-        QVariant deviceNameVariant = deviceInterface.property("Name");
-        if (deviceNameVariant.isValid()) {
-            deviceName = deviceNameVariant.toString();
-        }
-
-        // Get the device MAC address
-        QString deviceAddress;
-        QVariant deviceAddressVariant = deviceInterface.property("Address");
-        if (deviceAddressVariant.isValid()) {
-            deviceAddress = deviceAddressVariant.toString();
-        }
-
-        // Only continue processing if name contains "Ruuvi"
-        if (deviceName.contains("Ruuvi")) {
-            // Emit devicefound signal to be able to handle new devices in QML
-            emit deviceFound(deviceName, deviceAddress);
-            // Parse BT advertisement data from ManufacturerData field
-            // We need to read the ManufacturerData through org.freedesktop.DBus.Properties,
-            // otherwise we will crash if read the property with deviceInterface.property, see
-            // https://stackoverflow.com/questions/28345362/fatal-error-when-trying-to-get-a-dbus-property-with-custom-type
-            QDBusInterface deviceProps("org.bluez", objectPath.path(), "org.freedesktop.DBus.Properties", bus);
-            QDBusMessage reply = deviceProps.call("Get", "org.bluez.Device1", "ManufacturerData");
-            // See https://stackoverflow.com/questions/20206376/how-do-i-extract-the-returned-data-from-qdbusmessage-in-a-qt-dbus-call
-            // For explanation of the type switches below
-            QVariant firstReply = reply.arguments().first();
-            QVariant firstReplyVariant = firstReply.value<QDBusVariant>().variant();
-            const QDBusArgument &dbusArgs = firstReplyVariant.value<QDBusArgument>();
-            std::array<uint8_t, 24> manufacturerData = parseManufacturerData(dbusArgs);
-            qDebug() << "Backgroundscanner: Got new ManufacturerData (onInterfacesAdded):";
-            db->addDevice(deviceAddress, deviceName);
-            db->inputManufacturerData(deviceAddress, manufacturerData);
-
-            // Connect to PropertiesChanged for this specific device so we get the manufacturerData updates
-            bus.connect("org.bluez", objectPath.path(), "org.freedesktop.DBus.Properties",
-                        "PropertiesChanged", this, SLOT(onPropertiesChanged(QString, QVariantMap, QStringList, QDBusMessage)));
-        }
+        processDevice(objectPath);
     }
 }
 
