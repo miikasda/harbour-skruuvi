@@ -43,7 +43,10 @@ private slots:
     QString macFromObjectPath(const QString &path);
 
 private:
+    QString findAdapterPath();
+
     QDBusConnection bus;
     database* db;
     bool scanning;
+    QString adapterPath;
 };

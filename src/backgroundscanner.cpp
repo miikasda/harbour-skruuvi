@@ -21,7 +21,16 @@
 #include <QDebug>
 #include <QDBusConnection>
 #include <QDBusArgument>
+#include <QDBusMetaType>
+#include <QDBusReply>
 #include <QByteArray>
+#include <QMap>
+
+typedef QMap<QString, QVariantMap> BluezInterfaceMap;
+typedef QMap<QDBusObjectPath, BluezInterfaceMap> BluezManagedObjectMap;
+
+Q_DECLARE_METATYPE(BluezInterfaceMap)
+Q_DECLARE_METATYPE(BluezManagedObjectMap)
 
 backgroundscanner::backgroundscanner(QObject *parent, database* db)
     : QObject(parent)
@@ -29,6 +38,9 @@ backgroundscanner::backgroundscanner(QObject *parent, database* db)
     , db(db)
     , scanning(false)
 {
+    qDBusRegisterMetaType<BluezInterfaceMap>();
+    qDBusRegisterMetaType<BluezManagedObjectMap>();
+
     startScan();
 }
 
@@ -62,9 +74,38 @@ std::array<uint8_t, 24> backgroundscanner::parseManufacturerData(const QDBusArgu
     return manufacturerData;
 }
 
+QString backgroundscanner::findAdapterPath()
+{
+    QDBusInterface objectManager("org.bluez", "/", "org.freedesktop.DBus.ObjectManager", bus);
+    QDBusReply<BluezManagedObjectMap> reply = objectManager.call("GetManagedObjects");
+    if (!reply.isValid()) {
+        qWarning() << "Failed to query Bluetooth adapters:" << reply.error().message();
+        return {};
+    }
+
+    QString firstAdapter;
+    const BluezManagedObjectMap objects = reply.value();
+    for (auto object = objects.constBegin(); object != objects.constEnd(); ++object) {
+        const auto adapter = object.value().constFind("org.bluez.Adapter1");
+        if (adapter == object.value().constEnd()) {
+            continue;
+        }
+
+        const QString path = object.key().path();
+        if (firstAdapter.isEmpty()) {
+            firstAdapter = path;
+        }
+        if (adapter.value().value("Powered").toBool()) {
+            return path;
+        }
+    }
+
+    return firstAdapter;
+}
+
 QString backgroundscanner::macFromObjectPath(const QString &path)
 {
-    // Expected format: "/org/bluez/hci0/dev_XX_XX_XX_XX_XX_XX"
+    // Expected format: "/org/bluez/<adapter>/dev_XX_XX_XX_XX_XX_XX"
     QString base = path.section('/', -1); // get last segment "dev_xx_xx..."
     if (!base.startsWith("dev_"))
         return {};
@@ -76,8 +117,15 @@ QString backgroundscanner::macFromObjectPath(const QString &path)
 void backgroundscanner::startScan()
 {
     qDebug() << "Starting background scan...";
+    adapterPath = findAdapterPath();
+    if (adapterPath.isEmpty()) {
+        qWarning() << "No Bluetooth adapter found";
+        emit discoveryStopped();
+        return;
+    }
+
     // Create the adapter interface
-    QDBusInterface adapterInterface("org.bluez", "/org/bluez/hci0", "org.bluez.Adapter1", bus, this);
+    QDBusInterface adapterInterface("org.bluez", adapterPath, "org.bluez.Adapter1", bus, this);
 
     // Check if bluetooth adapter is on
     QVariant poweredVariant = adapterInterface.property("Powered");
@@ -109,7 +157,7 @@ void backgroundscanner::startScan()
 void backgroundscanner::stopScan()
 {
     // Create the adapter interface
-    QDBusInterface adapterInterface("org.bluez", "/org/bluez/hci0", "org.bluez.Adapter1", bus, this);
+    QDBusInterface adapterInterface("org.bluez", adapterPath, "org.bluez.Adapter1", bus, this);
     QDBusMessage stopDiscovery = adapterInterface.call("StopDiscovery");
     if (stopDiscovery.type() == QDBusMessage::ErrorMessage) {
         qDebug() << "Failed to stop device discovery:" << stopDiscovery.errorMessage();
