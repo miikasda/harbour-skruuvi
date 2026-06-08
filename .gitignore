@@ -1,4 +1,5 @@
 harbour-skruuvi.pro.user
-rpm/harbour-skruuvi.changes*
+rpm/harbour-skruuvi.changes.in
+rpm/harbour-skruuvi.changes.run.in
 **/.DS_Store
 .vscode/
