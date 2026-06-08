@@ -5,12 +5,17 @@ import "../modules/Opal/About" as A
 A.AboutPageBase {
     appName: "Skruuvi"
     appIcon: Qt.resolvedUrl("images/skruuvi-icon.png")
-    appVersion: "2.0.1"
+    appVersion: "2.0.2"
     description: "Reader for Ruuvi sensors on Sailfish OS"
     authors: "Miika Malin"
     licenses: A.License { spdxId: "GPL-3.0-or-later" }
     changelogItems: [
         // add new entries at the top
+        A.ChangelogItem {
+            version: "v2.0.2"
+            date: "2026-06-09"
+            paragraphs: "Fixed build compatibility with SFOS 5.1."
+        },
         A.ChangelogItem {
             version: "v2.0.1"
             date: "2026-06-08"

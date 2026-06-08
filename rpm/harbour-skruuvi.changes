@@ -1,6 +1,9 @@
 # * date Author's Name <author's email> version-release
 # - Summary of changes
 
+* Tue Jun 09 2026 Miika Malin <miikasda@users.noreply.github.com> - 2.0.2-1
+- Fixed build compatibility with SFOS 5.1
+
 * Mon Jun 08 2026 Miika Malin <miikasda@users.noreply.github.com> - 2.0.1-1
 - Fixed device scanning on SFOS 5.1 and cached devices not getting updated
 
