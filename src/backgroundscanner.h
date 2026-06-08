@@ -19,6 +19,7 @@
 #include <QDBusConnection>
 #include <QDBusObjectPath>
 #include <QDBusArgument>
+#include <QSet>
 #include "database.h"
 
 class backgroundscanner : public QObject
@@ -44,9 +45,12 @@ private slots:
 
 private:
     QString findAdapterPath();
+    void loadKnownDevices();
+    void processDevice(const QDBusObjectPath &objectPath);
 
     QDBusConnection bus;
     database* db;
     bool scanning;
     QString adapterPath;
+    QSet<QString> monitoredDevicePaths;
 };
